@@ -1,0 +1,4 @@
+Augmentor
+audiomentations
+librosa
+PyWavelets

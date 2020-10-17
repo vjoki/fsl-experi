@@ -1,0 +1,28 @@
+name: fsl-experi
+
+channels:
+  - pytorch
+  - defaults
+  - metric-learning
+  - conda-forge
+
+dependencies:
+  - cudatoolkit=10.2
+  - jupyterlab=2.2
+  - pip=20.2.3
+  - mypy=0.790
+  - pylint=2.6
+  - pip:
+    - -r file:requirements.txt
+    - seaborn=0.11.*
+  - python=3.8
+  - matplotlib=3.3
+  - pytorch::pytorch=1.6
+  - conda-forge::pytorch-lightning=1.0
+  - metric-learning::pytorch-metric-learning=0.9.93
+  - tensorboard=2.2
+  - pytorch::torchvision=0.7
+  - pytorch::torchaudio=0.6
+  - conda-forge::sox=14.4
+  # No sox for windows...?
+  - conda-forge::pysoundfile=0.10

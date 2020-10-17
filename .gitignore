@@ -1,0 +1,7 @@
+/data/*
+!/data/.gitkeep
+/checkpoints/
+/lightning_logs/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
