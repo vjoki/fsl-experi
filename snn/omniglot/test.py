@@ -4,11 +4,9 @@ import itertools
 import torch
 import torchvision.datasets as dset
 from torchvision import transforms
-from torch.utils.data import DataLoader
-from pytorch_lightning.loggers import TensorBoardLogger
-from PIL import Image
 
 from snn.omniglot.model import TwinNet
+
 
 # Quick hack to run a pretrained model on test data.
 # Mostly because I don't yet fully trust/understand what pl.test() does for me...
@@ -22,21 +20,11 @@ if __name__ == "__main__":
     parser.add_argument('--test_data_path', type=str, default='./data/processed/test/')
     args = vars(parser.parse_args())
 
-    logger = TensorBoardLogger("lightning_logs", name="snn")
-
-    # TODO: Wasn't able to load this without manually specifying batch_size and lr.
-    #       Should test again to see if this has changed.
-    #checkpoint = torch.load('./models/colab/snn-omniglot-epoch=85.ckpt')
-    #print(checkpoint.keys())
     model = TwinNet.load_from_checkpoint(args['model_path'])
+    print(model.hparams)
     model.eval()
     model.freeze()
 
-    # parser = pl.Trainer.add_argparse_args(parser)
-    # parser = TwinNet.add_model_specific_args(parser)
-    # args = parser.parse_args()
-    # trainer = pl.Trainer.from_argparse_args(args, logger=logger)
-    # trainer.test(model, datamodule=OmniglotDataModule())
 
     foldr = dset.ImageFolder(root=args['test_data_path'])
     correct = 0

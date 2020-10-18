@@ -211,15 +211,15 @@ def train_and_test(args: argparse.Namespace):
                                           filepath='./snn-omniglot-{epoch}-{val_loss:.2f}',
                                           save_top_k=3)
     logger = TensorBoardLogger(dict_args['log_dir'], name='snn')
-    trainer = pl.Trainer.from_argparse_args(args, logger=logger, deterministic=True,
+    trainer = pl.Trainer.from_argparse_args(args, logger=logger, progress_bar_refresh_rate=20,
+                                            deterministic=True, auto_lr_find=True,
                                             checkpoint_callback=checkpoint_callback,
-                                            callbacks=[early_stop_callback],
-                                            auto_lr_find=True)
+                                            callbacks=[early_stop_callback])
     model = TwinNet(**dict_args)
-    logger.log_hyperparams(params=model.hparams)
 
     # Tune learning rate.
     trainer.tune(model)
+    logger.log_hyperparams(params=model.hparams)
 
     # Train model.
     trainer.fit(model)

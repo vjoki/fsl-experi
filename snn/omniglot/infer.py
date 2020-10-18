@@ -1,24 +1,21 @@
 from argparse import ArgumentParser
-import itertools
 import torch
-import torchvision.datasets as dset
 from torchvision import transforms
-from torch.utils.data import DataLoader
-from pytorch_lightning.loggers import TensorBoardLogger
 from PIL import Image
 
 from snn.omniglot.model import TwinNet
 
+
 # Runs inference on input images using existing model.
 if __name__ == "__main__":
-    logger = TensorBoardLogger("lightning_logs", name="snn")
     parser = ArgumentParser()
+    parser.add_argument('--model_path', type=str, required=True)
     parser.add_argument('--img1', type=str, default='test.png')
     parser.add_argument('--img2', type=str, default='test2.png')
     args = vars(parser.parse_args())
 
-    checkpoint = torch.load('./models/colab/latest.ckpt')
-    model = TwinNet.load_from_checkpoint('./models/colab/latest.ckpt', batch_size=128, learning_rate=1e-3)
+    model = TwinNet.load_from_checkpoint(args['model_path'])
+    print(model.hparams)
     model.eval()
     model.freeze()
 
