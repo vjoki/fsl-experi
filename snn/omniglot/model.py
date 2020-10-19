@@ -42,6 +42,7 @@ class TwinNet(pl.LightningModule):
     def add_model_specific_args(parser: argparse.ArgumentParser):
         parser = argparse.ArgumentParser(parents=[parser], add_help=False)
         parser.add_argument('--learning_rate', type=float, default=1e-3, help='Initial learning rate used by auto_lr_find')
+        parser.add_argument('--max_epochs', type=int, default=100)
         parser.add_argument('--batch_size', type=int, default=128)
         parser.add_argument('--num_workers', type=int, default=1, help='# of workers used by DataLoader')
         parser.add_argument('--trials', type=int, default=320, help='# of 1-shot trials (validation/test)')
@@ -50,15 +51,18 @@ class TwinNet(pl.LightningModule):
         parser.add_argument('--data_path', type=str, default='./data/')
         return parser
 
+    # NOTE: Defaults here shouldn't really matter much, they're just here to make initializing the model
+    # for other purposes easier (such as log_graph)...
     def __init__(self, learning_rate: float = 1e-3,
-                 batch_size: int = 128,
+                 batch_size: int = 128, max_epochs: int = 100,
                  num_workers: int = 1, data_path: str = './data/', rng_seed: int = 0,
                  way: int = 20, trials: int = 320, num_train: int = 90000,
                  **kwargs):
         super().__init__()
         self.learning_rate = learning_rate
         self.batch_size = batch_size
-        self.save_hyperparameters('learning_rate', 'batch_size', 'rng_seed', 'way', 'trials', 'num_train')
+        self.max_epochs = max_epochs  # Needed for OneCycleLR
+        self.save_hyperparameters('learning_rate', 'batch_size', 'max_epochs', 'rng_seed', 'way', 'trials', 'num_train')
 
         self._way: Final = way
         self._trials: Final = trials
@@ -107,9 +111,11 @@ class TwinNet(pl.LightningModule):
         return self.out(dist)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr=(self.learning_rate or self.lr))
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', threshold=0.0003, verbose=True)
-        return [optimizer], [{ 'scheduler': scheduler, 'monitor': 'val_loss', 'interval': 'epoch' }]
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate)
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=self.learning_rate,
+                                                        epochs=self.max_epochs,
+                                                        steps_per_epoch=len(self.train_dataloader()))
+        return [optimizer], [{ 'scheduler': scheduler, 'monitor': 'val_loss', 'interval': 'step' }]
 
     @staticmethod
     def loss(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
@@ -127,7 +133,7 @@ class TwinNet(pl.LightningModule):
         return loss
 
     def training_epoch_end(self, training_step_outputs: List[Any]):
-        self.log('learning_rate_epoch', self.learning_rate or self.lr)
+        self.log('learning_rate_epoch', self.learning_rate)
         self.log('train_acc_epoch', self.train_accuracy.compute())
 
         # Graph the model, requires input data for forward(),
