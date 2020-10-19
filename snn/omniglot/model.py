@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import torchvision.datasets as dset
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from torch.utils.data import DataLoader
 
@@ -200,21 +200,35 @@ class TwinNet(pl.LightningModule):
 
 def train_and_test(args: argparse.Namespace):
     dict_args = vars(args)
-    pl.seed_everything(dict_args['rng_seed'])
+    seed = args.rng_seed
+    log_dir = args.log_dir
+    early_stop = args.early_stop
+    early_stop_min_delta = args.early_stop_min_delta
+    early_stop_patience = args.early_stop_patience
 
-    # Should give enough time for lr_scheduler to try do it's thing.
-    early_stop_callback = EarlyStopping(monitor='val_loss', mode='min',
-                                        min_delta=0.00005, patience=20,
-                                        verbose=True, strict=True)
-    # TODO: Is low val_loss the best choice for choosing the best model?
-    checkpoint_callback = ModelCheckpoint(monitor='val_loss', mode='min',
-                                          filepath='./snn-omniglot-{epoch}-{val_loss:.2f}',
-                                          save_top_k=3)
-    logger = TensorBoardLogger(dict_args['log_dir'], name='snn')
+    pl.seed_everything(seed)
+    callbacks = [LearningRateMonitor(logging_interval='step')]
+
+    if early_stop:
+        # Should give enough time for lr_scheduler to try do it's thing.
+        callbacks.append(EarlyStopping(
+            monitor='val_loss', mode='min',
+            min_delta=early_stop_min_delta, patience=early_stop_patience,
+            verbose=True, strict=True
+        ))
+
+    checkpoint_callback = ModelCheckpoint(
+        # TODO: Is low val_loss the best choice for choosing the best model?
+        monitor='val_loss', mode='min',
+        filepath='./snn-omniglot-{epoch}-{val_loss:.2f}',
+        save_top_k=3
+    )
+
+    logger = TensorBoardLogger(log_dir, name='snn')
     trainer = pl.Trainer.from_argparse_args(args, logger=logger, progress_bar_refresh_rate=20,
                                             deterministic=True, auto_lr_find=True,
                                             checkpoint_callback=checkpoint_callback,
-                                            callbacks=[early_stop_callback])
+                                            callbacks=callbacks)
     model = TwinNet(**dict_args)
 
     # Tune learning rate.
