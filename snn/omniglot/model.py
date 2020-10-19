@@ -143,7 +143,7 @@ class TwinNet(pl.LightningModule):
         loss = self.loss(out, y)
 
         self.val_accuracy(out, y)
-        self.log('val_loss', loss, on_step=True, on_epoch=True)
+        self.log('val_loss', loss, on_step=False, on_epoch=True)
 
     def validation_epoch_end(self, val_step_outputs: List[Any]):
         self.log('val_acc_epoch', self.val_accuracy.compute())
@@ -154,7 +154,7 @@ class TwinNet(pl.LightningModule):
         loss = self.loss(out, y)
 
         self.test_accuracy(out, y)
-        self.log('test_loss', loss, on_step=True, on_epoch=True)
+        self.log('test_loss', loss, on_step=False, on_epoch=True)
 
     def test_epoch_end(self, test_step_outputs: List[Any]):
         self.log('test_acc_epoch', self.test_accuracy.compute())
