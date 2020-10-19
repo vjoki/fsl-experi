@@ -135,7 +135,7 @@ class TwinNet(pl.LightningModule):
         # FIXME: Does not seem to be doing anything?
         if self.current_epoch == 1:
             x1, x2, _ = next(iter(self.train_dataloader()))
-            self.logger.experiment.log_graph(TwinNet(), [x1, x2])
+            self.logger.experiment.add_graph(TwinNet(), [x1, x2])
 
     def validation_step(self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch_idx: int):
         x1, x2, y = batch  # Validation DataLoader output
