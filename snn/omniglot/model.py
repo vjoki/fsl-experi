@@ -42,7 +42,6 @@ class TwinNet(pl.LightningModule):
     def add_model_specific_args(parser: argparse.ArgumentParser):
         parser = argparse.ArgumentParser(parents=[parser], add_help=False)
         parser.add_argument('--learning_rate', type=float, default=1e-3, help='Initial learning rate used by auto_lr_find')
-        parser.add_argument('--max_epochs', type=int, default=100)
         parser.add_argument('--batch_size', type=int, default=128)
         parser.add_argument('--num_workers', type=int, default=1, help='# of workers used by DataLoader')
         parser.add_argument('--trials', type=int, default=320, help='# of 1-shot trials (validation/test)')
