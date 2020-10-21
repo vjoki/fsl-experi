@@ -1,8 +1,6 @@
 import argparse
 import os
 import shutil
-import random
-from random import Random
 import numpy as np
 from PIL import Image
 import torch
@@ -188,29 +186,30 @@ class Omniglot(dset.ImageFolder):
 class TrainSet(Dataset):
     def __init__(self, dataset: Dataset, num_train: int, augment: bool = False):
         super().__init__()
-        self.dataset = dataset
-        self.num_train = num_train
-        self.augment = augment
+        self.dataset: Final = dataset
+        self.num_train: Final = num_train
+        self.augment: Final = augment
+        self.rng: Final = np.random.default_rng()
 
     def __len__(self):
         return self.num_train
 
     def __getitem__(self, index):
-        image1 = random.choice(self.dataset.imgs)
+        image1 = self.rng.choice(self.dataset.imgs)
 
         # get image from same class
         label = None
         if index % 2 == 1:
             label = 1.0
             while True:
-                image2 = random.choice(self.dataset.imgs)
+                image2 = self.rng.choice(self.dataset.imgs)
                 if image1[1] == image2[1]:
                     break
         # get image from different class
         else:
             label = 0.0
             while True:
-                image2 = random.choice(self.dataset.imgs)
+                image2 = self.rng.choice(self.dataset.imgs)
                 if image1[1] != image2[1]:
                     break
         image1 = Image.open(image1[0])
@@ -242,38 +241,38 @@ class TrainSet(Dataset):
 class TestSet(Dataset):
     def __init__(self, dataset: Dataset, trials: int, way: int, seed: int = 0):
         super().__init__()
-        self.dataset = dataset
-        self.trials = trials
-        self.way = way
-        self.transform = transforms.ToTensor()
-        self.seed = seed
-        self.img1 = None
+        self.dataset: Final = dataset
+        self.trials: Final = trials
+        self.way: Final = way
+        self.transform: Final = transforms.ToTensor()
+        self.seed: Final = seed
 
     def __len__(self):
         return (self.trials * self.way)
 
     def __getitem__(self, index):
-        self.rng = Random(self.seed + index)
+        rng = np.random.default_rng(self.seed + index)
 
         idx = index % self.way
         label = None
         # generate image pair from same class
         if idx == 0:
             label = 1.0
-            self.img1 = self.rng.choice(self.dataset.imgs)
+            img1 = rng.choice(self.dataset.imgs)
             while True:
-                img2 = self.rng.choice(self.dataset.imgs)
-                if self.img1[1] == img2[1]:
+                img2 = rng.choice(self.dataset.imgs)
+                if img1[1] == img2[1]:
                     break
         # generate image pair from different class
         else:
             label = 0.0
+            img1 = rng.choice(self.dataset.imgs)
             while True:
-                img2 = self.rng.choice(self.dataset.imgs)
-                if self.img1[1] != img2[1]:
+                img2 = rng.choice(self.dataset.imgs)
+                if img1[1] != img2[1]:
                     break
 
-        img1 = Image.open(self.img1[0])
+        img1 = Image.open(img1[0])
         img2 = Image.open(img2[0])
         img1 = img1.convert('L')
         img2 = img2.convert('L')
