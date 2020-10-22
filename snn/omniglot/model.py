@@ -1,11 +1,9 @@
 from typing import Tuple, Optional, Union, List, Any
 from typing_extensions import Final
-import os
 import argparse
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision.datasets as dset
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
@@ -41,12 +39,14 @@ class TwinNet(pl.LightningModule):
     @staticmethod
     def add_model_specific_args(parser: argparse.ArgumentParser):
         parser = argparse.ArgumentParser(parents=[parser], add_help=False)
-        parser.add_argument('--learning_rate', type=float, default=1e-3, help='Initial learning rate used by auto_lr_find')
+        parser.add_argument('--learning_rate', type=float, default=1e-3,
+                            help='Initial learning rate used by auto_lr_find')
         parser.add_argument('--batch_size', type=int, default=128)
         parser.add_argument('--num_workers', type=int, default=1, help='# of workers used by DataLoader')
         parser.add_argument('--trials', type=int, default=320, help='# of 1-shot trials (validation/test)')
         parser.add_argument('--way', type=int, default=20, help='# of ways in 1-shot trials')
-        parser.add_argument('--num_train', type=int, default=50000, help='# of pairs in training set (augmented, random pairs)')
+        parser.add_argument('--num_train', type=int, default=50000,
+                            help='# of pairs in training set (augmented, random pairs)')
         parser.add_argument('--data_path', type=str, default='./data/')
         return parser
 
@@ -81,6 +81,7 @@ class TwinNet(pl.LightningModule):
         # Source: https://github.com/pytorch/pytorch/tree/master/torch/nn/modules
         self.cnn: nn.Module = CNNLayer()
         # 256*6*6 = 9216
+        # NOTE: Amount of parameters seems really high...?
         self.fcl: nn.Module = nn.Sequential(nn.Linear(9216, 4096), nn.Sigmoid())
         self.out: nn.Module = nn.Linear(4096, 1)
 

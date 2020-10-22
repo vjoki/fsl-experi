@@ -12,7 +12,9 @@ import torchvision.datasets as dset
 from torch.utils.data import DataLoader
 from torch.utils.data.dataset import Dataset
 from torchvision import transforms
-from typing import Tuple, Optional, Union, List
+from typing_extensions import Final
+from typing import Optional, Union, List
+
 
 # TODO: Switch to this once save_hyperparameters is implemented for LightningDataModule
 # https://github.com/PyTorchLightning/pytorch-lightning/issues/3769
@@ -52,7 +54,8 @@ class OmniglotDataModule(pl.LightningDataModule):
         parser.add_argument('--num_workers', type=int, default=1, help='# of workers used by DataLoader')
         parser.add_argument('--trials', type=int, default=320, help='# of 1-shot trials (validation/test)')
         parser.add_argument('--way', type=int, default=20, help='# of ways in 1-shot trials')
-        parser.add_argument('--num_train', type=int, default=50000, help='# of pairs in training set (augmented, random pairs)')
+        parser.add_argument('--num_train', type=int, default=50000,
+                            help='# of pairs in training set (augmented, random pairs)')
         parser.add_argument('--data_path', type=str, default='./data/')
         return parser
 
@@ -118,14 +121,16 @@ def copy_alphabets(write_dir, alphabets):
 # adapted from https://github.com/kevinzakka/one-shot-siamese
 class Omniglot(dset.ImageFolder):
     resources = [
-        ("https://raw.githubusercontent.com/brendenlake/omniglot/master/python/images_background.zip", "68d2efa1b9178cc56df9314c21c6e718"),
-        ("https://raw.githubusercontent.com/brendenlake/omniglot/master/python/images_evaluation.zip", "6b91aef0f799c5bb55b94e3f2daec811")
+        ("https://raw.githubusercontent.com/brendenlake/omniglot/master/python/images_background.zip",
+         "68d2efa1b9178cc56df9314c21c6e718"),
+        ("https://raw.githubusercontent.com/brendenlake/omniglot/master/python/images_evaluation.zip",
+         "6b91aef0f799c5bb55b94e3f2daec811")
     ]
 
     def __init__(self, data_path: str, mode: str, download: bool = False, seed: int = 0):
         self.processed_path = os.path.join(data_path, 'processed')
         self._rng_seed = seed
-        if download == True and not self._processed_check_exists():
+        if download is True and not self._processed_check_exists():
             self.raw_path = os.path.join(data_path, 'raw')
             self._download()
             self._process()
