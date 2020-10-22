@@ -1,6 +1,8 @@
 import argparse
 import os
 import shutil
+import random
+from random import Random
 import numpy as np
 from PIL import Image
 import torch
@@ -182,6 +184,8 @@ class Omniglot(dset.ImageFolder):
         copy_alphabets(os.path.join(self.processed_path, 'test'), test_alphabets)
 
 
+# FIXME: Dataset classes should be refactored to have no state/rng.
+#        Randomization should happen in the DataLoader/Sampler.
 # from https://github.com/kevinzakka/one-shot-siamese
 class TrainSet(Dataset):
     def __init__(self, dataset: Dataset, num_train: int, augment: bool = False):
@@ -189,27 +193,27 @@ class TrainSet(Dataset):
         self.dataset: Final = dataset
         self.num_train: Final = num_train
         self.augment: Final = augment
-        self.rng: Final = np.random.default_rng()
 
     def __len__(self):
         return self.num_train
 
     def __getitem__(self, index):
-        image1 = self.rng.choice(self.dataset.imgs)
+        rng = random
+        image1 = rng.choice(self.dataset.imgs)
 
         # get image from same class
         label = None
         if index % 2 == 1:
             label = 1.0
             while True:
-                image2 = self.rng.choice(self.dataset.imgs)
+                image2 = rng.choice(self.dataset.imgs)
                 if image1[1] == image2[1]:
                     break
         # get image from different class
         else:
             label = 0.0
             while True:
-                image2 = self.rng.choice(self.dataset.imgs)
+                image2 = rng.choice(self.dataset.imgs)
                 if image1[1] != image2[1]:
                     break
         image1 = Image.open(image1[0])
@@ -251,8 +255,7 @@ class TestSet(Dataset):
         return (self.trials * self.way)
 
     def __getitem__(self, index):
-        rng = np.random.default_rng(self.seed + index)
-
+        rng = Random(self.seed + index)
         idx = index % self.way
         label = None
         # generate image pair from same class
