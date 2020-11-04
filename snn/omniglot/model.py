@@ -91,7 +91,7 @@ class TwinNet(pl.LightningModule):
 
     # Prediction/inference.
     # Basically as is from https://github.com/kevinzakka/one-shot-siamese
-    def forward(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
+    def forward(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor: # type: ignore[override]
         # print(x1.shape)
         x1 = self.cnn(x1)
         # print('{0}::{1}'.format(x1.shape, x1.size()))
@@ -115,13 +115,14 @@ class TwinNet(pl.LightningModule):
         scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=self.learning_rate,
                                                         epochs=self.max_epochs,
                                                         steps_per_epoch=len(self.train_dataloader()))
-        return [optimizer], [{ 'scheduler': scheduler, 'monitor': 'val_loss', 'interval': 'step' }]
+        return [optimizer], [ { 'scheduler': scheduler, 'monitor': 'val_loss', 'interval': 'step' } ]
 
     @staticmethod
     def loss(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         return F.binary_cross_entropy_with_logits(x, y)
 
-    def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch_idx: int) -> torch.Tensor:
+    def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor],  # type: ignore[override]
+                      batch_idx: int) -> torch.Tensor:
         x1, x2, y = batch  # Train DataLoader output
         out = self.forward(x1, x2)
         loss = self.loss(out, y)
@@ -143,7 +144,8 @@ class TwinNet(pl.LightningModule):
             x1, x2, _ = next(iter(self.train_dataloader()))
             self.logger.experiment.add_graph(TwinNet(), [x1, x2])
 
-    def validation_step(self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch_idx: int):
+    def validation_step(self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor],  # type: ignore[override]
+                        batch_idx: int):
         x1, x2, y = batch  # Validation DataLoader output
         out = self.forward(x1, x2)
         loss = self.loss(out, y)
@@ -154,7 +156,8 @@ class TwinNet(pl.LightningModule):
     def validation_epoch_end(self, val_step_outputs: List[Any]):
         self.log('val_acc_epoch', self.val_accuracy.compute())
 
-    def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch_idx: int):
+    def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor],  # type: ignore[override]
+                  batch_idx: int):
         x1, x2, y = batch  # Test DataLoader output
         out = self.forward(x1, x2)
         loss = self.loss(out, y)
@@ -213,7 +216,9 @@ def train_and_test(args: argparse.Namespace):
     early_stop_patience = args.early_stop_patience
 
     pl.seed_everything(seed)
-    callbacks = [LearningRateMonitor(logging_interval='step')]
+    callbacks: List[pl.callbacks.Callback] = [
+        LearningRateMonitor(logging_interval='step')
+    ]
 
     if early_stop:
         # Should give enough time for lr_scheduler to try do it's thing.

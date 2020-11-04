@@ -40,12 +40,9 @@ class OmniglotDataModule(pl.LightningDataModule):
             self._num_workers = num_workers
             self._pin_memory = True
 
-        self._train_dataset = None
-        self._val_dataset = None
-        self._test_dataset = None
-        self.training_set = None
-        self.validation_set = None
-        self.test_set = None
+        self.training_set: Dataset
+        self.validation_set: Dataset
+        self.test_set: Dataset
 
     @staticmethod
     def add_module_specific_args(parser):
@@ -79,19 +76,19 @@ class OmniglotDataModule(pl.LightningDataModule):
             self.test_set = TestSet(test_dataset, seed=self._rng_seed,
                                     trials=self._trials, way=self._way)
 
-    def train_dataloader(self) -> DataLoader:
+    def train_dataloader(self) -> DataLoader: # type: ignore[override]
         return DataLoader(
             self.training_set, batch_size=self.batch_size,
             shuffle=True, num_workers=self._num_workers, pin_memory=self._pin_memory,
         )
 
-    def val_dataloader(self) -> Union[DataLoader, List[DataLoader]]:
+    def val_dataloader(self) -> Union[DataLoader, List[DataLoader]]: # type: ignore[override]
         return DataLoader(
             self.validation_set, batch_size=self._way, shuffle=False,
             num_workers=self._num_workers, pin_memory=self._pin_memory,
         )
 
-    def test_dataloader(self) -> Union[DataLoader, List[DataLoader]]:
+    def test_dataloader(self) -> Union[DataLoader, List[DataLoader]]: # type: ignore[override]
         return DataLoader(
             self.test_set, batch_size=self._way, shuffle=False,
             num_workers=self._num_workers, pin_memory=self._pin_memory,
