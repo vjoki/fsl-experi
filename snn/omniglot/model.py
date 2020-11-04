@@ -71,8 +71,8 @@ class TwinNet(pl.LightningModule):
         self._rng_seed: Final = rng_seed
 
         # TODO: Does this work right, what about TPUs?
-        self._num_workers: Final = num_workers
-        self._pin_memory: Final = False
+        self._num_workers = num_workers
+        self._pin_memory = False
         if torch.cuda.is_available():
             self._num_workers = num_workers
             self._pin_memory = True

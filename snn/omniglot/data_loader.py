@@ -34,8 +34,8 @@ class OmniglotDataModule(pl.LightningDataModule):
         self.save_hyperparameters('batch_size', 'rng_seed', 'way', 'trials', 'num_train')
 
         # TODO: Does this work right, what about TPUs?
-        self._num_workers: Final = num_workers
-        self._pin_memory: Final = False
+        self._num_workers = num_workers
+        self._pin_memory = False
         if torch.cuda.is_available():
             self._num_workers = num_workers
             self._pin_memory = True
