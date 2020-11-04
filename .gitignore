@@ -1,6 +1,7 @@
 /data/*
 !/data/.gitkeep
-/checkpoints/
+/checkpoints/*
+!/checkpoints/.gitkeep
 /lightning_logs/
 __pycache__/
 *.pyc

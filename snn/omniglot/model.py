@@ -231,7 +231,7 @@ def train_and_test(args: argparse.Namespace):
     checkpoint_callback = ModelCheckpoint(
         # TODO: Is low val_loss the best choice for choosing the best model?
         monitor='val_loss', mode='min',
-        filepath='./snn-omniglot-{epoch}-{val_loss:.2f}',
+        filepath='./checkpoints/snn-omniglot-{epoch}-{val_loss:.2f}',
         save_top_k=3
     )
 
