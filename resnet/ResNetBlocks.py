@@ -2,11 +2,11 @@
 import torch.nn as nn
 
 
-class SEBasicBlock(nn.Module):
+class SEBasicBlock(nn.Module):  # pylint: disable=abstract-method
     expansion = 1
 
     def __init__(self, inplanes, planes, stride=1, downsample=None, reduction=8):
-        super(SEBasicBlock, self).__init__()
+        super().__init__()
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, padding=1, bias=False)
@@ -35,11 +35,11 @@ class SEBasicBlock(nn.Module):
         return out
 
 
-class SEBottleneck(nn.Module):
+class SEBottleneck(nn.Module):  # pylint: disable=abstract-method
     expansion = 4
 
     def __init__(self, inplanes, planes, stride=1, downsample=None, reduction=8):
-        super(SEBottleneck, self).__init__()
+        super().__init__()
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
@@ -76,9 +76,9 @@ class SEBottleneck(nn.Module):
         return out
 
 
-class SELayer(nn.Module):
+class SELayer(nn.Module):  # pylint: disable=abstract-method
     def __init__(self, channel, reduction=8):
-        super(SELayer, self).__init__()
+        super().__init__()
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.fc = nn.Sequential(
                 nn.Linear(channel, channel // reduction),

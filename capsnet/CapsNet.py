@@ -1,8 +1,8 @@
 # CapsNet implementation from https://github.com/adambielski/CapsNet-pytorch
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
 from torch.autograd import Variable
 
 
@@ -13,9 +13,9 @@ def squash(x):
     return x
 
 
-class AgreementRouting(nn.Module):
+class AgreementRouting(nn.Module):  # pylint: disable=abstract-method
     def __init__(self, input_caps, output_caps, n_iterations):
-        super(AgreementRouting, self).__init__()
+        super().__init__()
         self.n_iterations = n_iterations
         self.b = nn.Parameter(torch.zeros((input_caps, output_caps)))
 
@@ -28,7 +28,7 @@ class AgreementRouting(nn.Module):
 
         if self.n_iterations > 0:
             b_batch = self.b.expand((batch_size, input_caps, output_caps))
-            for r in range(self.n_iterations):
+            for _ in range(self.n_iterations):
                 v = v.unsqueeze(1)
                 b_batch = b_batch + (u_predict * v).sum(-1)
 
@@ -39,9 +39,9 @@ class AgreementRouting(nn.Module):
         return v
 
 
-class CapsLayer(nn.Module):
+class CapsLayer(nn.Module):  # pylint: disable=abstract-method
     def __init__(self, input_caps, input_dim, output_caps, output_dim, routing_module):
-        super(CapsLayer, self).__init__()
+        super().__init__()
         self.input_dim = input_dim
         self.input_caps = input_caps
         self.output_dim = output_dim
@@ -62,9 +62,9 @@ class CapsLayer(nn.Module):
         return v
 
 
-class PrimaryCapsLayer(nn.Module):
+class PrimaryCapsLayer(nn.Module):  # pylint: disable=abstract-method
     def __init__(self, input_channels, output_caps, output_dim, kernel_size, stride):
-        super(PrimaryCapsLayer, self).__init__()
+        super().__init__()
         self.conv = nn.Conv2d(input_channels, output_caps * output_dim, kernel_size=kernel_size, stride=stride)
         self.input_channels = input_channels
         self.output_caps = output_caps
@@ -82,9 +82,9 @@ class PrimaryCapsLayer(nn.Module):
         return out
 
 
-class CapsNet(nn.Module):
+class CapsNet(nn.Module):  # pylint: disable=abstract-method
     def __init__(self, routing_iterations, n_classes=10):
-        super(CapsNet, self).__init__()
+        super().__init__()
         self.conv1 = nn.Conv2d(1, 256, kernel_size=9, stride=1)
         self.primaryCaps = PrimaryCapsLayer(256, 32, 8, kernel_size=9, stride=2)  # outputs 6*6
         self.num_primaryCaps = 32 * 6 * 6
@@ -100,9 +100,9 @@ class CapsNet(nn.Module):
         return x, probs
 
 
-class CapsNetWithoutPrimaryCaps(nn.Module):
+class CapsNetWithoutPrimaryCaps(nn.Module):  # pylint: disable=abstract-method
     def __init__(self, routing_iterations, input_caps, input_dim, output_caps, output_dim):
-        super(CapsNetWithoutPrimaryCaps, self).__init__()
+        super().__init__()
         routing_module = AgreementRouting(input_caps, output_caps, routing_iterations)
         self.digitCaps = CapsLayer(input_caps, input_dim, output_caps, output_dim, routing_module)
 
@@ -112,9 +112,9 @@ class CapsNetWithoutPrimaryCaps(nn.Module):
         return x, probs
 
 
-class MarginLoss(nn.Module):
+class MarginLoss(nn.Module):  # pylint: disable=abstract-method
     def __init__(self, m_pos, m_neg, lambda_):
-        super(MarginLoss, self).__init__()
+        super().__init__()
         self.m_pos = m_pos
         self.m_neg = m_neg
         self.lambda_ = lambda_

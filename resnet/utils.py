@@ -19,8 +19,7 @@ def accuracy(output, target, topk=(1,)):
     return res
 
 
-class PreEmphasis(torch.nn.Module):
-
+class PreEmphasis(torch.nn.Module):  # pylint: disable=abstract-method
     def __init__(self, coef: float = 0.97):
         super().__init__()
         self.coef = coef

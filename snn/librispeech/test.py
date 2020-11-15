@@ -29,7 +29,7 @@ def test():
     print(model.hparams)
 
     # Dataloader args.
-    model._max_sample_length = args.max_sample_length
+    model.max_sample_length = None if args.max_sample_length == 0 else args.max_sample_length
     model.batch_size = args.batch_size
     model.num_workers = args.num_workers
     model.data_path = args.data_path
@@ -38,6 +38,7 @@ def test():
     model.freeze()
 
     trainer.test(model=model, ckpt_path=args.model_path)
+
 
 if __name__ == "__main__":
     test()

@@ -1,15 +1,15 @@
 # Implementation from https://github.com/clovaai/voxceleb_trainer
 import torch
-import torchaudio
 import torch.nn as nn
 import torch.nn.functional as F
+import torchaudio
 from resnet.ResNetBlocks import SEBasicBlock
 from resnet.utils import PreEmphasis
 
 
-class ResNetSE(nn.Module):
+class ResNetSE(nn.Module):  # pylint: disable=abstract-method
     def __init__(self, block, layers, num_filters, nOut, encoder_type='SAP', n_mels=40, log_input=True, **kwargs):
-        super(ResNetSE, self).__init__()
+        super().__init__()
 
         print('Embedding size is %d, encoder %s.' % (nOut, encoder_type))
 
@@ -73,12 +73,13 @@ class ResNetSE(nn.Module):
         layers = []
         layers.append(block(self.inplanes, planes, stride, downsample))
         self.inplanes = planes * block.expansion
-        for i in range(1, blocks):
+        for _ in range(1, blocks):
             layers.append(block(self.inplanes, planes))
 
         return nn.Sequential(*layers)
 
-    def new_parameter(self, *size):
+    @staticmethod
+    def new_parameter(*size):
         out = nn.Parameter(torch.FloatTensor(*size))
         nn.init.xavier_normal_(out)
         return out

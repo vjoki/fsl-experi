@@ -57,12 +57,15 @@ class TwinNet(pl.LightningModule):
         super().__init__()
         self.learning_rate = learning_rate
         self.batch_size = batch_size
-        self.max_epochs = max_epochs  # Needed for OneCycleLR
+        self.max_epochs: Final = max_epochs  # Needed for OneCycleLR
+        self.max_sample_length: Final = None if max_sample_length == 0 else max_sample_length
+        self.rng_seed: Final = rng_seed
         self.save_hyperparameters('learning_rate', 'batch_size', 'max_epochs', 'rng_seed', 'max_sample_length')
 
-        self._max_sample_length: Final = max_sample_length
         self._data_path: Final = data_path
-        self._rng_seed: Final = rng_seed
+
+        # Pad samples in DataLoader batches to the same length as the longest sample.
+        self._collate_fn: Final = None if self.max_sample_length else collate_var_len_tuples_fn
 
         # TODO: Does this work right, what about TPUs?
         self._num_workers = num_workers
@@ -136,13 +139,13 @@ class TwinNet(pl.LightningModule):
                       batch: Union[Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
                                    Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]],
                       batch_idx: int) -> torch.Tensor:
-        if self._max_sample_length is None:
+        if self.max_sample_length is None:
             x1, x2, lengths, y = cast(Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor], batch)
             # TODO: Do something to ignore padding?
         else:
             x1, x2, y = cast(Tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch)
 
-        out = self.forward(x1, x2)
+        out = self(x1, x2)
         loss = self.loss(out, y)
 
         acc = self.train_accuracy(out, y)
@@ -158,17 +161,17 @@ class TwinNet(pl.LightningModule):
                         batch: Union[Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
                                      Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]],
                         batch_idx: int):
-        if self._max_sample_length is None:
+        if self.max_sample_length is None:
             x1, x2, lengths, y = cast(Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor], batch)
             # TODO: Do something to ignore padding?
         else:
             x1, x2, y = cast(Tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch)
 
-        out = self.forward(x1, x2)
+        out = self(x1, x2)
         loss = self.loss(out, y)
 
         self.val_accuracy(out, y)
-        self.log('val_loss', loss, on_step=False, on_epoch=True)
+        self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
 
         return [out, y]
 
@@ -177,7 +180,7 @@ class TwinNet(pl.LightningModule):
 
         try:
             eer, _, auc = compute_epoch_end_eer(val_step_outputs)
-            self.log('val_eer', eer)
+            self.log('val_eer', eer, prog_bar=True)
             self.log('val_auc', auc)
         except ValueError:
             # Will fail if labels are all the same value, which tends to happen with auto_lr_finder.
@@ -188,13 +191,13 @@ class TwinNet(pl.LightningModule):
                   batch: Union[Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
                                Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]],
                   batch_idx: int):
-        if self._max_sample_length is None:
+        if self.max_sample_length is None:
             x1, x2, lengths, y = cast(Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor], batch)
             # TODO: Do something to ignore padding?
         else:
             x1, x2, y = cast(Tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch)
 
-        out = self.forward(x1, x2)
+        out = self(x1, x2)
         loss = self.loss(out, y)
 
         self.test_accuracy(out, y)
@@ -218,43 +221,34 @@ class TwinNet(pl.LightningModule):
         if stage == 'fit' or stage is None:
             train_dataset = dset.LIBRISPEECH(self._data_path, url='train-clean-100', download=False)
             val_dataset = dset.LIBRISPEECH(self._data_path, url='dev-clean', download=False)
-            self.training_set = PairDataset(train_dataset, max_sample_length=self._max_sample_length)
-            self.validation_set = PairDataset(val_dataset, max_sample_length=self._max_sample_length)
+            self.training_set = PairDataset(train_dataset, max_sample_length=self.max_sample_length)
+            self.validation_set = PairDataset(val_dataset, max_sample_length=self.max_sample_length)
         if stage == 'test' or stage is None:
             test_dataset = dset.LIBRISPEECH(self._data_path, url='test-clean', download=False)
-            self.test_set = PairDataset(test_dataset, max_sample_length=self._max_sample_length)
+            self.test_set = PairDataset(test_dataset, max_sample_length=self.max_sample_length)
 
     def train_dataloader(self) -> DataLoader:
-        collate_fn = None
-        if self._max_sample_length is None:
-            collate_fn = collate_var_len_tuples_fn
-
         return DataLoader(
             self.training_set, batch_size=self.batch_size,
             shuffle=True, num_workers=self._num_workers, pin_memory=self._pin_memory,
-            collate_fn=collate_fn
+            collate_fn=self._collate_fn,  # type: ignore
+            worker_init_fn=lambda worker_id: pl.seed_everything(worker_id + self.rng_seed)  # type: ignore
         )
 
     def val_dataloader(self) -> Union[DataLoader, List[DataLoader]]:
-        collate_fn = None
-        if self._max_sample_length is None:
-            collate_fn = collate_var_len_tuples_fn
-
         return DataLoader(
             self.validation_set, batch_size=self.batch_size, shuffle=False,
             num_workers=self._num_workers, pin_memory=self._pin_memory,
-            collate_fn=collate_fn
+            collate_fn=self._collate_fn,  # type: ignore
+            worker_init_fn=lambda worker_id: pl.seed_everything(worker_id + self.rng_seed)  # type: ignore
         )
 
     def test_dataloader(self) -> Union[DataLoader, List[DataLoader]]:
-        collate_fn = None
-        if self._max_sample_length is None:
-            collate_fn = collate_var_len_tuples_fn
-
         return DataLoader(
             self.test_set, batch_size=self.batch_size, shuffle=False,
             num_workers=self._num_workers, pin_memory=self._pin_memory,
-            collate_fn=collate_fn
+            collate_fn=self._collate_fn,  # type: ignore
+            worker_init_fn=lambda worker_id: pl.seed_everything(worker_id + self.rng_seed)  # type: ignore
         )
 
 

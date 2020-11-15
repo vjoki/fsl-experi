@@ -31,7 +31,6 @@ class OmniglotDataModule(pl.LightningDataModule):
 
         self._data_path: Final = data_path
         self._rng_seed: Final = rng_seed
-        self.save_hyperparameters('batch_size', 'rng_seed', 'way', 'trials', 'num_train')
 
         # TODO: Does this work right, what about TPUs?
         self._num_workers = num_workers
