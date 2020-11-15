@@ -8,12 +8,34 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from pytorch_lightning.metrics import Metric
 import torchaudio.datasets as dset
 from torch.utils.data import DataLoader
+from pytorch_lightning.metrics.functional.classification import roc, auroc
 
 from snn.librispeech.data_loader import PairDataset, TripletDataset
 from resnet.ResNetSE34V2 import MainModel as ResNet
 from capsnet.CapsNet import CapsNetWithoutPrimaryCaps, MarginLoss
+
+
+def equal_error_rate(scores, labels):
+    fpr, tpr, thresholds = roc(scores, labels, pos_label=1)
+    fnr = 1 - tpr
+
+    x = torch.argmin(torch.abs(fnr - fpr))
+    eer_threshold = thresholds[x]
+    eer = fpr[x]
+
+    return eer, eer_threshold
+
+
+def compute_epoch_end_eer(outputs: List[List[torch.Tensor]]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    scores = torch.cat(list((scores for step in outputs for scores in step[0])))
+    scores = torch.sigmoid(scores)
+    labels = torch.cat(list((labels for step in outputs for labels in step[1])))
+    auc = auroc(scores, labels, pos_label=1)
+    eer, threshold = equal_error_rate(scores, labels)
+    return eer, threshold, auc
 
 
 def collate_var_len_tuples_fn(batch):
@@ -144,8 +166,19 @@ class TwinNet(pl.LightningModule):
         self.val_accuracy(out, y)
         self.log('val_loss', loss, on_step=False, on_epoch=True)
 
-    def validation_epoch_end(self, val_step_outputs: List[Any]):
+        return [out, y]
+
+    def validation_epoch_end(self, val_step_outputs: List[List[torch.Tensor]]):
         self.log('val_acc_epoch', self.val_accuracy.compute())
+
+        try:
+            eer, _, auc = compute_epoch_end_eer(val_step_outputs)
+            self.log('val_eer', eer)
+            self.log('val_auc', auc)
+        except ValueError:
+            # Will fail if labels are all the same value, which tends to happen with auto_lr_finder.
+            # So we just ignore these.
+            pass
 
     def test_step(self,  # type: ignore[override]
                   batch: Union[Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
@@ -163,8 +196,14 @@ class TwinNet(pl.LightningModule):
         self.test_accuracy(out, y)
         self.log('test_loss', loss, on_step=False, on_epoch=True)
 
-    def test_epoch_end(self, test_step_outputs: List[Any]):
+        return [out, y]
+
+    def test_epoch_end(self, test_step_outputs: List[List[torch.Tensor]]):
         self.log('test_acc_epoch', self.test_accuracy.compute())
+
+        eer, _, auc = compute_epoch_end_eer(test_step_outputs)
+        self.log('test_eer', eer)
+        self.log('test_auc', auc)
 
     def prepare_data(self):
         dset.LIBRISPEECH(self._data_path, url='train-clean-100', download=True)
