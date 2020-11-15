@@ -25,7 +25,7 @@ def test():
                                             progress_bar_refresh_rate=20,
                                             deterministic=True)
 
-    model = TwinNet.load_from_checkpoint(args.model_path, stric=False)
+    model = TwinNet.load_from_checkpoint(args.model_path, strict=False)
     print(model.hparams)
 
     # Dataloader args.
