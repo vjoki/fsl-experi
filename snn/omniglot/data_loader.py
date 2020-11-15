@@ -76,19 +76,19 @@ class OmniglotDataModule(pl.LightningDataModule):
             self.test_set = TestSet(test_dataset, seed=self._rng_seed,
                                     trials=self._trials, way=self._way)
 
-    def train_dataloader(self) -> DataLoader: # type: ignore[override]
+    def train_dataloader(self) -> DataLoader:  # type: ignore[override]
         return DataLoader(
             self.training_set, batch_size=self.batch_size,
             shuffle=True, num_workers=self._num_workers, pin_memory=self._pin_memory,
         )
 
-    def val_dataloader(self) -> Union[DataLoader, List[DataLoader]]: # type: ignore[override]
+    def val_dataloader(self) -> Union[DataLoader, List[DataLoader]]:  # type: ignore[override]
         return DataLoader(
             self.validation_set, batch_size=self._way, shuffle=False,
             num_workers=self._num_workers, pin_memory=self._pin_memory,
         )
 
-    def test_dataloader(self) -> Union[DataLoader, List[DataLoader]]: # type: ignore[override]
+    def test_dataloader(self) -> Union[DataLoader, List[DataLoader]]:  # type: ignore[override]
         return DataLoader(
             self.test_set, batch_size=self._way, shuffle=False,
             num_workers=self._num_workers, pin_memory=self._pin_memory,
@@ -167,8 +167,6 @@ class Omniglot(dset.ImageFolder):
         background_alphabets = [os.path.join(back_dir, x) for x in next(os.walk(back_dir))[1]]
         background_alphabets.sort()
 
-        # list of all drawers (1 to 20)
-        background_drawers = list(np.arange(1, 21))
         print("There are {} alphabets.".format(len(background_alphabets)))
 
         # from 40 alphabets, randomly select 30

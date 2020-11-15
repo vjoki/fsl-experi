@@ -34,5 +34,5 @@ class PreEmphasis(torch.nn.Module):
         assert len(input.size()) == 2, 'The number of dimensions of input tensor must be 2!'
         # reflect padding to match lengths of in/out
         input = input.unsqueeze(1)
-        input = F.pad(input, (1, 0), 'reflect')
+        input = F.pad(input, (1, 0), 'reflect')  # type: ignore
         return F.conv1d(input, self.flipped_filter).squeeze(1)  # type: ignore

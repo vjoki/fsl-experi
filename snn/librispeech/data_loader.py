@@ -1,20 +1,12 @@
-import argparse
-import os
-import shutil
 import random
 import collections
-import random
-from random import Random
+from typing import Optional, List, Dict, Tuple
+from typing_extensions import Final
 import numpy as np
 import torch
 import torch.nn.functional as F
-import pytorch_lightning as pl
 import torchaudio.datasets as dset
-from torch.utils.data import DataLoader
 from torch.utils.data.dataset import Dataset
-from torchaudio import transforms
-from typing_extensions import Final
-from typing import Optional, Union, List, Dict, Any, Tuple
 
 
 def pair_speaker_samples(dataset: List[str], randomize: bool,
@@ -95,7 +87,7 @@ def process_waveform(waveform, length: Optional[int] = None):
 
     # Pad if too small, else pick random starting point for the slice.
     if wf_len < length:
-        waveform = F.pad(waveform, (0, length - wf_len))
+        waveform = F.pad(waveform, (0, length - wf_len))  # type: ignore
         wf_len = waveform.size(1)
         start = 0
     else:

@@ -1,8 +1,8 @@
 from argparse import ArgumentParser
 import pytorch_lightning as pl
-from pytorch_lightning.loggers import TensorBoardLogger
 
 from snn.librispeech.model import TwinNet, train_and_test
+
 
 def train():
     parser = ArgumentParser()
@@ -18,6 +18,7 @@ def train():
     args = parser.parse_args()
 
     train_and_test(args)
+
 
 if __name__ == "__main__":
     train()

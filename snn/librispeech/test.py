@@ -4,6 +4,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 
 from snn.librispeech.model import TwinNet
 
+
 def test():
     parser = ArgumentParser()
     parser.add_argument('--rng_seed', type=int, default=1, help='RNG seed for reproducibility')
@@ -12,8 +13,8 @@ def test():
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--num_workers', type=int, default=1, help='# of workers used by DataLoader')
     parser.add_argument('--data_path', type=str, default='./data/')
-    parser.add_argument('--max_sample_length', type=int, default=None,
-                        help='Maximum length of audio samples used, longer samples are clipped to fit.')
+    parser.add_argument('--max_sample_length', type=int, default=32000,
+                        help='Maximum length of samples used, clipped to fit. Set to 0 for no limit.')
     parser = pl.Trainer.add_argparse_args(parser)
     args = parser.parse_args()
 

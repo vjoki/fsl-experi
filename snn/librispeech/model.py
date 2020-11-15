@@ -1,6 +1,6 @@
+import argparse
 from typing import cast, Tuple, Optional, Union, List, Any
 from typing_extensions import Final
-import argparse
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -8,17 +8,17 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from pytorch_lightning.metrics import Metric
+from pytorch_lightning.metrics.functional.classification import roc, auroc
 import torchaudio.datasets as dset
 from torch.utils.data import DataLoader
-from pytorch_lightning.metrics.functional.classification import roc, auroc
+from torch.utils.data.dataset import Dataset
 
 from snn.librispeech.data_loader import PairDataset, TripletDataset
 from resnet.ResNetSE34V2 import MainModel as ResNet
 from capsnet.CapsNet import CapsNetWithoutPrimaryCaps, MarginLoss
 
 
-def equal_error_rate(scores, labels):
+def equal_error_rate(scores: torch.Tensor, labels: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
     fpr, tpr, thresholds = roc(scores, labels, pos_label=1)
     fnr = 1 - tpr
 
@@ -40,7 +40,7 @@ def compute_epoch_end_eer(outputs: List[List[torch.Tensor]]) -> Tuple[torch.Tens
 
 def collate_var_len_tuples_fn(batch):
     a, b, labels = zip(*batch)
-    lengths = torch.tensor([(t1.size(0), t2.size(0)) for (t1, t2) in zip(a, b)])
+    lengths = torch.as_tensor(list(map(lambda t1, t2: (t1.size(0), t2.size(0)), a, b)))
     a = torch.nn.utils.rnn.pad_sequence(a, batch_first=True)
     b = torch.nn.utils.rnn.pad_sequence(b, batch_first=True)
     return a, b, lengths, torch.utils.data.dataloader.default_collate(labels)
@@ -84,6 +84,10 @@ class TwinNet(pl.LightningModule):
         self.val_accuracy = pl.metrics.Accuracy(compute_on_step=False)
         self.test_accuracy = pl.metrics.Accuracy(compute_on_step=False)
 
+        self.training_set: Dataset
+        self.validation_set: Dataset
+        self.test_set: Dataset
+
     @staticmethod
     def add_model_specific_args(parser: argparse.ArgumentParser):
         parser = argparse.ArgumentParser(parents=[parser], add_help=False)
@@ -92,8 +96,8 @@ class TwinNet(pl.LightningModule):
         parser.add_argument('--batch_size', type=int, default=128)
         parser.add_argument('--num_workers', type=int, default=1, help='# of workers used by DataLoader')
         parser.add_argument('--data_path', type=str, default='./data/')
-        parser.add_argument('--max_sample_length', type=int, default=None,
-                            help='Maximum length of audio samples used, longer samples are clipped to fit.')
+        parser.add_argument('--max_sample_length', type=int, default=32000,
+                            help='Maximum length of samples used, clipped to fit. Set to 0 for no limit.')
         return parser
 
     def forward(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
