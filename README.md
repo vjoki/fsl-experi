@@ -24,6 +24,19 @@ dataset.
     finder](https://pytorch-lightning.readthedocs.io/en/latest/lr_finder.html)
     from PyTorch Lightning.
   - AdamW optimizer<sup>[[2](#references)]</sup>, with 1cycle learning rate policy<sup>[[3](#references), [4](#references)]</sup>.
+- [`snn/librispeech/`](snn/librispeech/): Siamese capsule network using Thin-ResNet34
+  for one-shot learning on [LibriSpeech](http://www.openslr.org/12/) dataset.
+  - Experimenting based on ideas from paper by Hajavi et al.
+    <sup>[[5](#references)]</sup>.
+  - Thin-ResNet34 implementation copied from
+    [https://github.com/clovaai/voxceleb_trainer](https://github.com/clovaai/voxceleb_trainer).
+  - CapsNet implementation copied from
+    [https://github.com/adambielski/CapsNet-pytorch](https://github.com/adambielski/CapsNet-pytorch).
+  - Using the [learning rate
+    finder](https://pytorch-lightning.readthedocs.io/en/latest/lr_finder.html)
+    from PyTorch Lightning.
+  - AdamW optimizer<sup>[[2](#references)]</sup>, with 1cycle learning rate
+    policy<sup>[[3](#references), [4](#references)]</sup>.
 
 ## Usage
 ```shell
@@ -32,7 +45,7 @@ python -m <model>.<dataset>.train --help
 
 **Example**: train model `snn/omniglot/` using 1 GPU:
 ```shell
-python -m snn.omniglot.train --gpus 1 --num_workers 4 --batch_size 128 --max_epochs 50
+python -O -m snn.omniglot.train --gpus 1 --num_workers 4 --batch_size 128 --max_epochs 50
 ```
 
 ## References
@@ -46,3 +59,6 @@ python -m snn.omniglot.train --gpus 1 --num_workers 4 --batch_size 128 --max_epo
    Machine Learning for Multi-Domain Operations Applications.* Vol. 11006.
    International Society for Optics and Photonics, 2019. [https://arxiv.org/abs/1708.07120](https://arxiv.org/abs/1708.07120).
 4. https://sgugger.github.io/the-1cycle-policy.html
+5. Hajavi, Amirhossein, and Ali Etemad. "Siamese Capsule Network for End-to-End
+   Speaker Recognition In The Wild." *arXiv preprint arXiv:2009.13480* (2020).
+   [https://arxiv.org/abs/2009.13480](https://arxiv.org/abs/2009.13480).
