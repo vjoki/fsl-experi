@@ -35,6 +35,7 @@ dataset.
   - Using the [learning rate
     finder](https://pytorch-lightning.readthedocs.io/en/latest/lr_finder.html)
     from PyTorch Lightning.
+  - Optional spectogram frequency and time masking as per SpecAugment<sup>[[6](#references)]</sup>.
   - AdamW optimizer<sup>[[2](#references)]</sup>, with 1cycle learning rate
     policy<sup>[[3](#references), [4](#references)]</sup>.
 
@@ -62,3 +63,8 @@ python -O -m snn.omniglot.train --gpus 1 --num_workers 4 --batch_size 128 --max_
 5. Hajavi, Amirhossein, and Ali Etemad. "Siamese Capsule Network for End-to-End
    Speaker Recognition In The Wild." *arXiv preprint arXiv:2009.13480* (2020).
    [https://arxiv.org/abs/2009.13480](https://arxiv.org/abs/2009.13480).
+6. Park, Daniel S., Yu Zhang, Chung-Cheng Chiu, Youzheng Chen, Bo Li, William
+   Chan, Quoc V. Le, and Yonghui Wu. "Specaugment on large scale datasets." In
+   *ICASSP 2020-2020 IEEE International Conference on Acoustics, Speech and
+   Signal Processing (ICASSP)*, pp. 6879-6883. IEEE, 2020.
+   [https://arxiv.org/abs/1904.08779](https://arxiv.org/abs/1904.08779).

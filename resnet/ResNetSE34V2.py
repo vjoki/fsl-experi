@@ -2,13 +2,11 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchaudio
 from resnet.ResNetBlocks import SEBasicBlock
-from resnet.utils import PreEmphasis
 
 
 class ResNetSE(nn.Module):  # pylint: disable=abstract-method
-    def __init__(self, block, layers, num_filters, nOut, encoder_type='SAP', n_mels=40, log_input=True, **kwargs):
+    def __init__(self, block, layers, num_filters, nOut, encoder_type='SAP', n_mels=40, **kwargs):
         super().__init__()
 
         print('Embedding size is %d, encoder %s.' % (nOut, encoder_type))
@@ -16,7 +14,6 @@ class ResNetSE(nn.Module):  # pylint: disable=abstract-method
         self.inplanes = num_filters[0]
         self.encoder_type = encoder_type
         self.n_mels = n_mels
-        self.log_input = log_input
 
         self.conv1 = nn.Conv2d(1, num_filters[0], kernel_size=3, stride=1, padding=1)
         self.relu = nn.ReLU(inplace=True)
@@ -26,13 +23,6 @@ class ResNetSE(nn.Module):  # pylint: disable=abstract-method
         self.layer2 = self._make_layer(block, num_filters[1], layers[1], stride=(2, 2))
         self.layer3 = self._make_layer(block, num_filters[2], layers[2], stride=(2, 2))
         self.layer4 = self._make_layer(block, num_filters[3], layers[3], stride=(2, 2))
-
-        self.instancenorm = nn.InstanceNorm1d(n_mels)
-        self.torchfb = torch.nn.Sequential(
-                PreEmphasis(),
-                torchaudio.transforms.MelSpectrogram(sample_rate=16000, n_fft=512, win_length=400, hop_length=160,
-                                                     window_fn=torch.hamming_window, n_mels=n_mels)
-                )
 
         outmap_size = int(self.n_mels/8)
 
@@ -85,13 +75,6 @@ class ResNetSE(nn.Module):  # pylint: disable=abstract-method
         return out
 
     def forward(self, x):
-
-        with torch.no_grad():
-            x = self.torchfb(x)+1e-6
-            if self.log_input:
-                x = x.log()
-            x = self.instancenorm(x).unsqueeze(1)
-
         x = self.conv1(x)
         x = self.relu(x)
         x = self.bn1(x)

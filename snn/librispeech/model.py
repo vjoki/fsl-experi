@@ -1,20 +1,22 @@
 import argparse
-from typing import cast, Tuple, Optional, Union, List, Any
+from typing import cast, Callable, Tuple, Optional, Union, List, Any
 from typing_extensions import Final
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchaudio
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.metrics.functional.classification import roc, auroc
 import torchaudio.datasets as dset
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Sampler
 from torch.utils.data.dataset import Dataset
 
 from snn.librispeech.data_loader import PairDataset, TripletDataset
 from resnet.ResNetSE34V2 import MainModel as ResNet
+from resnet.utils import PreEmphasis
 from capsnet.CapsNet import CapsNetWithoutPrimaryCaps, MarginLoss
 
 
@@ -51,8 +53,9 @@ class TwinNet(pl.LightningModule):
     # for other purposes easier (such as log_graph)...
     def __init__(self, learning_rate: float = 1e-3,
                  max_sample_length: Optional[int] = None,
-                 batch_size: int = 128, max_epochs: int = 100,
+                 batch_size: int = 128, max_epochs: int = 100, num_train: int = 0,
                  num_workers: int = 1, data_path: str = './data/', rng_seed: int = 0,
+                 augment: bool = False,
                  **kwargs):
         super().__init__()
         self.learning_rate = learning_rate
@@ -60,7 +63,10 @@ class TwinNet(pl.LightningModule):
         self.max_epochs: Final = max_epochs  # Needed for OneCycleLR
         self.max_sample_length: Final = None if max_sample_length == 0 else max_sample_length
         self.rng_seed: Final = rng_seed
-        self.save_hyperparameters('learning_rate', 'batch_size', 'max_epochs', 'rng_seed', 'max_sample_length')
+        self.augment: Final = augment
+        self.num_train: Final = num_train
+        self.save_hyperparameters('learning_rate', 'batch_size', 'max_epochs', 'rng_seed', 'max_sample_length',
+                                  'num_train', 'augment')
 
         self._data_path: Final = data_path
 
@@ -83,6 +89,26 @@ class TwinNet(pl.LightningModule):
         # 4x128 -> 512 -> 1
         self.out: nn.Module = nn.Linear(512, 1)
 
+        n_mels = 40
+        n_fft = 512
+        self.instancenorm = nn.InstanceNorm1d(n_mels)
+        self.spectrogram = torch.nn.Sequential(
+            PreEmphasis(),
+            torchaudio.transforms.MelSpectrogram(sample_rate=16000, n_fft=n_fft, win_length=400, hop_length=160,
+                                                 window_fn=torch.hamming_window, n_mels=n_mels)
+        )
+
+        self.augment_spectogram: Optional[Callable[[torch.Tensor], torch.Tensor]] = None
+        if self.augment:
+            F = 0.25
+            T = 0.15
+            self.augment_spectogram = torch.nn.Sequential(
+                torchaudio.transforms.FrequencyMasking(freq_mask_param=int(F * n_mels)),
+                torchaudio.transforms.FrequencyMasking(freq_mask_param=int(F * n_mels)),
+                torchaudio.transforms.TimeMasking(time_mask_param=int(T * (n_fft // 2 + 1))),
+                torchaudio.transforms.TimeMasking(time_mask_param=int(T * (n_fft // 2 + 1)))
+            )
+
         self.train_accuracy = pl.metrics.Accuracy()
         self.val_accuracy = pl.metrics.Accuracy(compute_on_step=False)
         self.test_accuracy = pl.metrics.Accuracy(compute_on_step=False)
@@ -90,6 +116,7 @@ class TwinNet(pl.LightningModule):
         self.training_set: Dataset
         self.validation_set: Dataset
         self.test_set: Dataset
+        self.training_sampler: Optional[Sampler] = None
 
     @staticmethod
     def add_model_specific_args(parser: argparse.ArgumentParser):
@@ -97,7 +124,12 @@ class TwinNet(pl.LightningModule):
         parser.add_argument('--learning_rate', type=float, default=1e-3,
                             help='Initial learning rate used by auto_lr_find')
         parser.add_argument('--batch_size', type=int, default=128)
-        parser.add_argument('--num_workers', type=int, default=1, help='# of workers used by DataLoader')
+        parser.add_argument('--num_train', type=int, default=0,
+                            help='# of samples to take from training data each epoch, 0 to use all.'
+                            'Use with --augment if value is greater than the amount of training data pairs.')
+        parser.add_argument('--augment', action='store_true', default=False,
+                            help='Augment training data using SpecAugment without time warping.')
+        parser.add_argument('--num_workers', type=int, default=1, help='# of workers used by DataLoader.')
         parser.add_argument('--data_path', type=str, default='./data/')
         parser.add_argument('--max_sample_length', type=int, default=32000,
                             help='Maximum length of samples used, clipped to fit. Set to 0 for no limit.')
@@ -124,6 +156,15 @@ class TwinNet(pl.LightningModule):
         #return self.out(dist)
         return self.out(x)
 
+    def spectogram_transform(self, x: torch.Tensor, augment: bool = False) -> torch.Tensor:
+        with torch.no_grad():
+            x = self.spectrogram(x)+1e-6
+            x = x.log()
+            if augment and self.augment_spectogram:
+                x = self.augment_spectogram(x)
+            x = self.instancenorm(x).unsqueeze(1)
+        return x
+
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate)
         scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=self.learning_rate,
@@ -145,6 +186,8 @@ class TwinNet(pl.LightningModule):
         else:
             x1, x2, y = cast(Tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch)
 
+        x1 = self.spectogram_transform(x1, augment=self.augment)
+        x2 = self.spectogram_transform(x2, augment=self.augment)
         out = self(x1, x2)
         loss = self.loss(out, y)
 
@@ -167,6 +210,8 @@ class TwinNet(pl.LightningModule):
         else:
             x1, x2, y = cast(Tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch)
 
+        x1 = self.spectogram_transform(x1)
+        x2 = self.spectogram_transform(x2)
         out = self(x1, x2)
         loss = self.loss(out, y)
 
@@ -197,6 +242,8 @@ class TwinNet(pl.LightningModule):
         else:
             x1, x2, y = cast(Tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch)
 
+        x1 = self.spectogram_transform(x1)
+        x2 = self.spectogram_transform(x2)
         out = self(x1, x2)
         loss = self.loss(out, y)
 
@@ -221,7 +268,12 @@ class TwinNet(pl.LightningModule):
         if stage == 'fit' or stage is None:
             train_dataset = dset.LIBRISPEECH(self._data_path, url='train-clean-100', download=False)
             val_dataset = dset.LIBRISPEECH(self._data_path, url='dev-clean', download=False)
+
             self.training_set = PairDataset(train_dataset, max_sample_length=self.max_sample_length)
+            if self.num_train != 0:
+                self.training_sampler = torch.utils.data.RandomSampler(self.training_set, replacement=True,
+                                                                       num_samples=self.num_train)
+
             self.validation_set = PairDataset(val_dataset, max_sample_length=self.max_sample_length)
         if stage == 'test' or stage is None:
             test_dataset = dset.LIBRISPEECH(self._data_path, url='test-clean', download=False)
@@ -230,7 +282,9 @@ class TwinNet(pl.LightningModule):
     def train_dataloader(self) -> DataLoader:
         return DataLoader(
             self.training_set, batch_size=self.batch_size,
-            shuffle=True, num_workers=self._num_workers, pin_memory=self._pin_memory,
+            shuffle=self.training_sampler is None,
+            num_workers=self._num_workers, pin_memory=self._pin_memory,
+            sampler=self.training_sampler,
             collate_fn=self._collate_fn,  # type: ignore
             worker_init_fn=lambda worker_id: pl.seed_everything(worker_id + self.rng_seed)  # type: ignore
         )
