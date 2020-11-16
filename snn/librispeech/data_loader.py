@@ -125,7 +125,7 @@ class PairDataset(Dataset):
         assert self._max_length is None or waveform1.size(0) == waveform2.size(0) == self._max_length
 
         label = 1.0 if speaker1 == speaker2 else 0.0
-        y = torch.from_numpy(np.array([label], dtype=np.float32))
+        y = torch.as_tensor([label])
         return (waveform1, waveform2, y)
 
 
