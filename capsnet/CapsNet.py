@@ -7,9 +7,9 @@ from torch.autograd import Variable
 
 
 def squash(x):
-    lengths2 = x.pow(2).sum(dim=2)
-    lengths = lengths2.sqrt()
-    x = x * (lengths2 / (1 + lengths2) / lengths).view(x.size(0), x.size(1), 1)
+    norm = x.norm(dim=2)
+    norm2 = norm.pow(2)
+    x = x * (norm / (norm2 + 1)).view(x.size(0), x.size(1), 1)
     return x
 
 
