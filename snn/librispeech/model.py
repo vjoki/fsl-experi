@@ -86,7 +86,8 @@ class TwinNet(pl.LightningModule):
     # for other purposes easier (such as log_graph)...
     def __init__(self, learning_rate: float = 1e-3,
                  max_sample_length: Optional[int] = None,
-                 batch_size: int = 128, max_epochs: int = 100, num_train: int = 0,
+                 batch_size: int = 128, max_epochs: int = 100,
+                 num_train: int = 0, num_speakers: int = 0,
                  num_workers: int = 1, data_path: str = './data/', rng_seed: int = 0,
                  augment: bool = False, plot_roc: bool = False,
                  **kwargs):
@@ -98,8 +99,9 @@ class TwinNet(pl.LightningModule):
         self.rng_seed: Final = rng_seed
         self.augment: Final = augment
         self.num_train: Final = num_train
+        self.num_speakers: Final = None if num_speakers == 0 else num_speakers
         self.save_hyperparameters('learning_rate', 'batch_size', 'max_epochs', 'rng_seed', 'max_sample_length',
-                                  'num_train', 'augment')
+                                  'num_speakers', 'num_train', 'augment')
 
         self._plot_roc: Final = plot_roc
         self._data_path: Final = data_path
@@ -159,6 +161,8 @@ class TwinNet(pl.LightningModule):
         parser.add_argument('--learning_rate', type=float, default=1e-3,
                             help='Initial learning rate used by auto_lr_find')
         parser.add_argument('--batch_size', type=int, default=128)
+        parser.add_argument('--num_speakers', type=int, default=0,
+                            help='Limits the # of speakers to train on, 0 to select all.')
         parser.add_argument('--num_train', type=int, default=0,
                             help='# of samples to take from training data each epoch, 0 to use all.'
                             'Use with --augment if value is greater than the amount of training data pairs.')
@@ -307,7 +311,7 @@ class TwinNet(pl.LightningModule):
             train_dataset = dset.LIBRISPEECH(self._data_path, url='train-clean-100', download=False)
             val_dataset = dset.LIBRISPEECH(self._data_path, url='dev-clean', download=False)
 
-            self.training_set = PairDataset(train_dataset, max_sample_length=self.max_sample_length)
+            self.training_set = PairDataset(train_dataset, n_speakers=self.num_speakers, max_sample_length=self.max_sample_length)
             if self.num_train != 0:
                 self.training_sampler = torch.utils.data.RandomSampler(self.training_set, replacement=True,
                                                                        num_samples=self.num_train)
