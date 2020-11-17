@@ -1,16 +1,16 @@
 import argparse
-from typing import cast, Callable, Tuple, Optional, Union, List, Any
+from typing import cast, Tuple, Optional, Union, List, Any
 from typing_extensions import Final
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchaudio
+import torchaudio.datasets as dset
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.metrics.functional.classification import roc, auroc
-import torchaudio.datasets as dset
 from torch.utils.data import DataLoader, Sampler
 from torch.utils.data.dataset import Dataset
 import matplotlib.pyplot as plt
@@ -111,34 +111,35 @@ class TwinNet(pl.LightningModule):
             self._num_workers = num_workers
             self._pin_memory = True
 
+        n_mels = 40
+        n_fft = 512
+
+        self.instancenorm = nn.InstanceNorm1d(n_mels)
+        self.spectrogram: nn.Module = torch.nn.Sequential(
+            PreEmphasis(),
+            torchaudio.transforms.MelSpectrogram(sample_rate=16000, n_fft=n_fft, win_length=400, hop_length=160,
+                                                 window_fn=torch.hamming_window, n_mels=n_mels)
+        )
+
+        self.augment_spectrogram: Optional[nn.Module] = None
+        if self.augment:
+            F = 0.25
+            T = 0.15
+            self.augment_spectrogram = torch.nn.Sequential(
+                torchaudio.transforms.FrequencyMasking(freq_mask_param=int(F * n_mels)),
+                torchaudio.transforms.FrequencyMasking(freq_mask_param=int(F * n_mels)),
+                torchaudio.transforms.TimeMasking(time_mask_param=int(T * (n_fft // 2 + 1))),
+                torchaudio.transforms.TimeMasking(time_mask_param=int(T * (n_fft // 2 + 1)))
+            )
+
         # waveform -> MelSpectrogram (n_fft=512, n_mels=40) -> 512
-        self.cnn: nn.Module = ResNet(nOut=512, encoder_type='SAP')
+        self.cnn: nn.Module = ResNet(nOut=512, encoder_type='SAP', n_mels=n_mels)
         # 2x512 -> 4x128
         self.caps: nn.Module = CapsNetWithoutPrimaryCaps(routing_iterations=3,
                                                          input_caps=2, input_dim=512,
                                                          output_caps=4, output_dim=128)
         # 4x128 -> 512 -> 1
         self.out: nn.Module = nn.Linear(512, 1)
-
-        n_mels = 40
-        n_fft = 512
-        self.instancenorm = nn.InstanceNorm1d(n_mels)
-        self.spectrogram = torch.nn.Sequential(
-            PreEmphasis(),
-            torchaudio.transforms.MelSpectrogram(sample_rate=16000, n_fft=n_fft, win_length=400, hop_length=160,
-                                                 window_fn=torch.hamming_window, n_mels=n_mels)
-        )
-
-        self.augment_spectogram: Optional[Callable[[torch.Tensor], torch.Tensor]] = None
-        if self.augment:
-            F = 0.25
-            T = 0.15
-            self.augment_spectogram = torch.nn.Sequential(
-                torchaudio.transforms.FrequencyMasking(freq_mask_param=int(F * n_mels)),
-                torchaudio.transforms.FrequencyMasking(freq_mask_param=int(F * n_mels)),
-                torchaudio.transforms.TimeMasking(time_mask_param=int(T * (n_fft // 2 + 1))),
-                torchaudio.transforms.TimeMasking(time_mask_param=int(T * (n_fft // 2 + 1)))
-            )
 
         self.train_accuracy = pl.metrics.Accuracy()
         self.val_accuracy = pl.metrics.Accuracy(compute_on_step=False)
@@ -191,12 +192,13 @@ class TwinNet(pl.LightningModule):
         with torch.no_grad():
             x = self.spectrogram(x)+1e-6
             x = x.log()
-            if augment and self.augment_spectogram:
-                x = self.augment_spectogram(x)
+            if augment and self.augment_spectrogram:
+                x = self.augment_spectrogram(x)
             x = self.instancenorm(x).unsqueeze(1)
         return x
 
     def configure_optimizers(self):
+        assert self.num_train == 0 or len(self.train_dataloader()) == self.max_samples
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate)
         scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=self.learning_rate,
                                                         epochs=self.max_epochs,
