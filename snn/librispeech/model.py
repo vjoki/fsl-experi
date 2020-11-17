@@ -235,7 +235,7 @@ class TwinNet(pl.LightningModule):
 
         acc = self.train_accuracy(out, y)
         self.log('train_acc_step', acc, on_step=True, on_epoch=False)
-        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=False, logger=True)
 
         return loss
 
