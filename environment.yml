@@ -16,6 +16,7 @@ dependencies:
     - -r file:requirements.txt
     - seaborn=0.11.*
   - python=3.8
+  - scipy=1.5.*
   - matplotlib=3.3
   - pytorch::pytorch=1.7
   - conda-forge::pytorch-lightning=1.0

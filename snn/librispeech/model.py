@@ -13,6 +13,7 @@ from pytorch_lightning.metrics.functional.classification import roc, auroc
 import torchaudio.datasets as dset
 from torch.utils.data import DataLoader, Sampler
 from torch.utils.data.dataset import Dataset
+import matplotlib.pyplot as plt
 
 from snn.librispeech.data_loader import PairDataset, TripletDataset
 from resnet.ResNetSE34V2 import MainModel as ResNet
@@ -20,13 +21,43 @@ from resnet.utils import PreEmphasis
 from capsnet.CapsNet import CapsNetWithoutPrimaryCaps, MarginLoss
 
 
-def equal_error_rate(scores: torch.Tensor, labels: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+def equal_error_rate(scores: torch.Tensor, labels: torch.Tensor,
+                     plot: bool = False) -> Tuple[torch.Tensor, torch.Tensor]:
     fpr, tpr, thresholds = roc(scores, labels, pos_label=1)
     fnr = 1 - tpr
 
-    x = torch.argmin(torch.abs(fnr - fpr))
-    eer_threshold = thresholds[x]
-    eer = fpr[x]
+    # Index of the nearest intersection point.
+    idx = torch.argmin(torch.abs(fnr - fpr))
+
+    # roc() can return fpr, tpr, thresholds with much shorter length than scores.size(0)
+    # (e.g. cases where scores.size(0) = 2611 and fnr.size(0) = 4), which leads to a large
+    # differences between fpr[e] and fnr[e]. Thus we take the mean of fpr[e] and fnr[e] as a
+    # good enough approximation. Could also interpolate using scipy brentq and interp1d methods,
+    # but this on the other hand leads to frequent division by zero errors in some cases.
+    eer = 0.5 * (fpr[idx] + fnr[idx])
+    eer_threshold = thresholds[idx]
+
+    # https://yangcha.github.io/EER-ROC/
+    # https://stackoverflow.com/questions/28339746/equal-error-rate-in-python
+    # Unfortunately this seems to fail frequently, incorrectly returning 0.0 and nan.
+    #
+    # from scipy.optimize import brentq
+    # from scipy.interpolate import interp1d
+    # eer = brentq(lambda x: 1. - x - interp1d(fpr, tpr)(x), 0., 1.)
+    # eer_threshold = interp1d(fpr, thresholds)(eer)
+
+    if plot:
+        fpr = fpr.cpu().numpy()
+        tpr = tpr.cpu().numpy()
+        plt.xlabel('False positive rate')
+        plt.ylabel('True positive rate')
+        plt.plot([0, 1], [0, 1], 'r--', label='Reference', alpha=0.6)
+        plt.plot([1, 0], [0, 1], 'k--', label='EER line', alpha=0.6)
+        plt.plot(fpr, tpr, label='ROC curve')
+        plt.fill_between(fpr, tpr, 0, label='AUC', color='0.8')
+        plt.plot(fpr[idx], tpr[idx], 'ko', label='EER = {:.2f}%'.format(eer * 100))  # EER point
+        plt.legend()
+        plt.show()
 
     return eer, eer_threshold
 
