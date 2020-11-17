@@ -62,12 +62,14 @@ def equal_error_rate(scores: torch.Tensor, labels: torch.Tensor,
     return eer, eer_threshold
 
 
-def compute_epoch_end_eer(outputs: List[List[torch.Tensor]]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+def compute_epoch_end_eer(outputs: List[List[torch.Tensor]],
+                          plot: bool = False) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     scores = torch.cat(list((scores for step in outputs for scores in step[0])))
+    # NOTE: Need sigmoid here because we skip the sigmoid in forward() due to using BCE with logits for loss.
     scores = torch.sigmoid(scores)
     labels = torch.cat(list((labels for step in outputs for labels in step[1])))
     auc = auroc(scores, labels, pos_label=1)
-    eer, threshold = equal_error_rate(scores, labels)
+    eer, threshold = equal_error_rate(scores, labels, plot=plot)
     return eer, threshold, auc
 
 
@@ -86,7 +88,7 @@ class TwinNet(pl.LightningModule):
                  max_sample_length: Optional[int] = None,
                  batch_size: int = 128, max_epochs: int = 100, num_train: int = 0,
                  num_workers: int = 1, data_path: str = './data/', rng_seed: int = 0,
-                 augment: bool = False,
+                 augment: bool = False, plot_roc: bool = False,
                  **kwargs):
         super().__init__()
         self.learning_rate = learning_rate
@@ -99,6 +101,7 @@ class TwinNet(pl.LightningModule):
         self.save_hyperparameters('learning_rate', 'batch_size', 'max_epochs', 'rng_seed', 'max_sample_length',
                                   'num_train', 'augment')
 
+        self._plot_roc: Final = plot_roc
         self._data_path: Final = data_path
 
         # Pad samples in DataLoader batches to the same length as the longest sample.
@@ -165,6 +168,8 @@ class TwinNet(pl.LightningModule):
         parser.add_argument('--data_path', type=str, default='./data/')
         parser.add_argument('--max_sample_length', type=int, default=32000,
                             help='Maximum length of samples used, clipped to fit. Set to 0 for no limit.')
+        parser.add_argument('--plot_roc', action='store_true', default=False,
+                            help='Plot ROC curve after testing.')
         return parser
 
     def forward(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
@@ -288,7 +293,7 @@ class TwinNet(pl.LightningModule):
     def test_epoch_end(self, test_step_outputs: List[List[torch.Tensor]]):
         self.log('test_acc_epoch', self.test_accuracy.compute())
 
-        eer, _, auc = compute_epoch_end_eer(test_step_outputs)
+        eer, _, auc = compute_epoch_end_eer(test_step_outputs, plot=self._plot_roc)
         self.log('test_eer', eer)
         self.log('test_auc', auc)
 
