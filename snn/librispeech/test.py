@@ -7,7 +7,7 @@ from snn.librispeech.model import TwinNet
 
 def test():
     parser = ArgumentParser()
-    parser.add_argument('--rng_seed', type=int, default=1, help='RNG seed for reproducibility')
+    parser.add_argument('--rng_seed', type=int, default=1)
     parser.add_argument('--log_dir', type=str, default='./lightning_logs/', help='Tensorboard log directory')
     parser.add_argument('--model_path', type=str, required=True)
     parser = TwinNet.add_model_specific_args(parser)
@@ -21,7 +21,9 @@ def test():
                                             progress_bar_refresh_rate=20,
                                             deterministic=True)
 
-    model = TwinNet.load_from_checkpoint(args.model_path, strict=False, **vars(args))
+    model = TwinNet.load_from_checkpoint(args.model_path, strict=False,
+                                         # Filter defaulted flags so that we don't needlessly override hparams.
+                                         **{k: v for k, v in vars(args).items() if v != parser.get_default(k)})
     print(model.hparams)
 
     model.eval()

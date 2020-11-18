@@ -11,7 +11,7 @@ def train():
                         help='Minimum change in val_loss quantity to qualify as an improvement')
     parser.add_argument('--early_stop_patience', type=int, default=15,
                         help='# of validation epochs with no improvement after which training will be stopped')
-    parser.add_argument('--rng_seed', type=int, default=1, help='RNG seed for reproducibility')
+    parser.add_argument('--rng_seed', type=int, default=1)
     parser.add_argument('--log_dir', type=str, default='./lightning_logs/', help='Tensorboard log directory')
     parser = TwinNet.add_model_specific_args(parser)
     parser = pl.Trainer.add_argparse_args(parser)
