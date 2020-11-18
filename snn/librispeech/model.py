@@ -85,7 +85,7 @@ class TwinNet(pl.LightningModule):
     # NOTE: Defaults here shouldn't really matter much, they're just here to make initializing the model
     # for other purposes easier (such as log_graph)...
     def __init__(self, learning_rate: float = 1e-3,
-                 max_sample_length: Optional[int] = None,
+                 max_sample_length: int = 0,
                  batch_size: int = 128, max_epochs: int = 100,
                  num_train: int = 0, num_speakers: int = 0,
                  num_workers: int = 1, data_path: str = './data/', rng_seed: int = 0,
