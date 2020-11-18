@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from resnet.ResNetBlocks import SEBasicBlock
+from resnet.vlad import GhostVLAD
 
 
 class ResNetSE(nn.Module):  # pylint: disable=abstract-method
@@ -26,23 +27,33 @@ class ResNetSE(nn.Module):  # pylint: disable=abstract-method
 
         outmap_size = int(self.n_mels/8)
 
-        self.attention = nn.Sequential(
-            nn.Conv1d(num_filters[3] * outmap_size, 128, kernel_size=1),
-            nn.ReLU(),
-            nn.BatchNorm1d(128),
-            nn.Conv1d(128, num_filters[3] * outmap_size, kernel_size=1),
-            nn.Softmax(dim=2),
-        )
+        if self.encoder_type != "VLAD":
+            self.attention = nn.Sequential(
+                nn.Conv1d(num_filters[3] * outmap_size, 128, kernel_size=1),
+                nn.ReLU(),
+                nn.BatchNorm1d(128),
+                nn.Conv1d(128, num_filters[3] * outmap_size, kernel_size=1),
+                nn.Softmax(dim=2),
+            )
 
         if self.encoder_type == "SAP":
             out_dim = num_filters[3] * outmap_size
         elif self.encoder_type == "ASP":
             out_dim = num_filters[3] * outmap_size * 2
+        elif self.encoder_type == "VLAD":
+            out_dim = 8*num_filters[3]
+            print("ResNet VLAD input/output: {} -> {}.".format(num_filters[3], out_dim))
+            self.vlad = nn.Sequential(
+                GhostVLAD(ghost_clusters=1, vlad_clusters=8, dim=num_filters[3]),
+                nn.Linear(out_dim, 128),
+                nn.BatchNorm1d(128)
+            )
         else:
             raise ValueError('Undefined encoder')
 
-        print("ResNet FC layer dimensions are {} -> {}.".format(out_dim, nOut))
-        self.fc = nn.Linear(out_dim, nOut)
+        if self.encoder_type != "VLAD":
+            print("ResNet FC layer dimensions are {} -> {}.".format(out_dim, nOut))
+            self.fc = nn.Linear(out_dim, nOut)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -84,8 +95,9 @@ class ResNetSE(nn.Module):  # pylint: disable=abstract-method
         x = self.layer3(x)
         x = self.layer4(x)
 
-        x = x.reshape(x.size()[0], -1, x.size()[-1])
-        w = self.attention(x)
+        if self.encoder_type != "VLAD":
+            x = x.reshape(x.size()[0], -1, x.size()[-1])
+            w = self.attention(x)
 
         if self.encoder_type == "SAP":
             x = torch.sum(x * w, dim=2)
@@ -93,9 +105,14 @@ class ResNetSE(nn.Module):  # pylint: disable=abstract-method
             mu = torch.sum(x * w, dim=2)
             sg = torch.sqrt((torch.sum((x**2) * w, dim=2) - mu**2).clamp(min=1e-5))
             x = torch.cat((mu, sg), 1)
+        elif self.encoder_type == "VLAD":
+            x = F.normalize(x, p=2, dim=0)
+            x = self.vlad(x)
+            x = F.normalize(x, p=2, dim=0)
 
-        x = x.view(x.size()[0], -1)
-        x = self.fc(x)
+        if self.encoder_type != "VLAD":
+            x = x.view(x.size()[0], -1)
+            x = self.fc(x)
 
         return x
 
