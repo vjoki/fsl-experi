@@ -21,11 +21,20 @@ from resnet.utils import PreEmphasis
 from capsnet.CapsNet import CapsNetWithoutPrimaryCaps, MarginLoss
 
 
-def equal_error_rate(scores: torch.Tensor, labels: torch.Tensor,
-                     plot: bool = False) -> Tuple[torch.Tensor, torch.Tensor]:
-    fpr, tpr, thresholds = roc(scores, labels, pos_label=1)
-    fnr = 1 - tpr
+def minDCF(fpr, fnr, thresholds, p_target: float = 0.05, c_miss: int = 1, c_fa: int = 1):
+    c_det = (c_miss * p_target * fnr) + (c_fa * (1 - p_target) * fpr)
+    min_c_det_idx = torch.argmin(c_det)
+    min_c_det = c_det[min_c_det_idx]
+    min_c_det_threshold = thresholds[min_c_det_idx]
 
+    c_def = min(c_miss * p_target, c_fa * (1 - p_target))
+    min_dcf = min_c_det / c_def
+
+    return min_dcf, min_c_det_threshold
+
+
+def equal_error_rate(fpr: torch.Tensor, fnr: torch.Tensor,
+                     thresholds: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     # Index of the nearest intersection point.
     idx = torch.argmin(torch.abs(fnr - fpr))
 
@@ -46,6 +55,23 @@ def equal_error_rate(scores: torch.Tensor, labels: torch.Tensor,
     # eer = brentq(lambda x: 1. - x - interp1d(fpr, tpr)(x), 0., 1.)
     # eer_threshold = interp1d(fpr, thresholds)(eer)
 
+    return eer, eer_threshold, idx
+
+
+def compute_evaluation_metrics(outputs: List[List[torch.Tensor]],
+                               plot: bool = False) -> Tuple[torch.Tensor, torch.Tensor,
+                                                            torch.Tensor, torch.Tensor, torch.Tensor]:
+    scores = torch.cat(list((scores for step in outputs for scores in step[0])))
+    # NOTE: Need sigmoid here because we skip the sigmoid in forward() due to using BCE with logits for loss.
+    scores = torch.sigmoid(scores)
+    labels = torch.cat(list((labels for step in outputs for labels in step[1])))
+    auc = auroc(scores, labels, pos_label=1)
+    fpr, tpr, thresholds = roc(scores, labels, pos_label=1)
+    fnr = 1 - tpr
+
+    eer, eer_threshold, idx = equal_error_rate(fpr, fnr, thresholds)
+    min_dcf, min_dcf_threshold = minDCF(fpr, fnr, thresholds)
+
     if plot:
         fpr = fpr.cpu().numpy()
         tpr = tpr.cpu().numpy()
@@ -59,18 +85,7 @@ def equal_error_rate(scores: torch.Tensor, labels: torch.Tensor,
         plt.legend()
         plt.show()
 
-    return eer, eer_threshold
-
-
-def compute_epoch_end_eer(outputs: List[List[torch.Tensor]],
-                          plot: bool = False) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    scores = torch.cat(list((scores for step in outputs for scores in step[0])))
-    # NOTE: Need sigmoid here because we skip the sigmoid in forward() due to using BCE with logits for loss.
-    scores = torch.sigmoid(scores)
-    labels = torch.cat(list((labels for step in outputs for labels in step[1])))
-    auc = auroc(scores, labels, pos_label=1)
-    eer, threshold = equal_error_rate(scores, labels, plot=plot)
-    return eer, threshold, auc
+    return eer, eer_threshold, auc, min_dcf, min_dcf_threshold
 
 
 def collate_var_len_tuples_fn(batch):
@@ -285,8 +300,11 @@ class TwinNet(pl.LightningModule):
         self.log('val_acc_epoch', self.val_accuracy.compute())
 
         try:
-            eer, _, auc = compute_epoch_end_eer(val_step_outputs)
-            self.log('val_eer', eer, prog_bar=True)
+            eer, eer_thresh, auc, mdcf, mdcf_thresh = compute_evaluation_metrics(val_step_outputs)
+            self.log('val_eer', eer)
+            self.log('val_eer_threshold', eer_thresh)
+            self.log('val_min_dcf', mdcf)
+            self.log('val_min_dcf_threshold', mdcf_thresh)
             self.log('val_auc', auc)
         except ValueError:
             # Will fail if labels are all the same value, which tends to happen with auto_lr_finder.
@@ -316,8 +334,11 @@ class TwinNet(pl.LightningModule):
     def test_epoch_end(self, test_step_outputs: List[List[torch.Tensor]]):
         self.log('test_acc_epoch', self.test_accuracy.compute())
 
-        eer, _, auc = compute_epoch_end_eer(test_step_outputs, plot=self._plot_roc)
+        eer, eer_thresh, auc, mdcf, mdcf_thresh = compute_evaluation_metrics(test_step_outputs, plot=self._plot_roc)
         self.log('test_eer', eer)
+        self.log('test_eer_threshold', eer_thresh)
+        self.log('test_min_dcf', mdcf)
+        self.log('test_min_dcf_threshold', mdcf_thresh)
         self.log('test_auc', auc)
 
     def prepare_data(self):
