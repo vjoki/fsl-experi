@@ -89,9 +89,11 @@ class TwinNet(pl.LightningModule):
                  batch_size: int = 128, max_epochs: int = 100,
                  num_train: int = 0, num_speakers: int = 0,
                  num_workers: int = 1, data_path: str = './data/', rng_seed: int = 0,
+                 n_mels: int = 40, aggregation_type: str = 'SAP',
                  augment: bool = False, plot_roc: bool = False,
                  **kwargs):
         super().__init__()
+        # Training/testing params
         self.learning_rate = learning_rate
         self.batch_size = batch_size
         self.max_epochs: Final = max_epochs  # Needed for OneCycleLR
@@ -100,8 +102,9 @@ class TwinNet(pl.LightningModule):
         self.augment: Final = augment
         self.num_train: Final = num_train
         self.num_speakers: Final = None if num_speakers == 0 else num_speakers
+
         self.save_hyperparameters('learning_rate', 'batch_size', 'max_epochs', 'rng_seed', 'max_sample_length',
-                                  'num_speakers', 'num_train', 'augment')
+                                  'num_speakers', 'num_train', 'augment', 'n_mels', 'aggregation_type')
 
         self._plot_roc: Final = plot_roc
         self._data_path: Final = data_path
@@ -116,9 +119,7 @@ class TwinNet(pl.LightningModule):
             self._num_workers = num_workers
             self._pin_memory = True
 
-        n_mels = 40
         n_fft = 512
-
         self.instancenorm = nn.InstanceNorm1d(n_mels)
         self.spectrogram: nn.Module = torch.nn.Sequential(
             PreEmphasis(),
@@ -137,14 +138,23 @@ class TwinNet(pl.LightningModule):
                 torchaudio.transforms.TimeMasking(time_mask_param=int(T * (n_fft // 2 + 1)))
             )
 
-        # waveform -> MelSpectrogram (n_fft=512, n_mels=40) -> 512
-        self.cnn: nn.Module = ResNet(nOut=512, encoder_type='SAP', n_mels=n_mels)
-        # 2x512 -> 4x128
+        # waveform -> MelSpectrogram (n_fft=512, n_mels) -> C
+        self.cnn: nn.Module = ResNet(nOut=512, encoder_type=aggregation_type, n_mels=n_mels)
+
+        if aggregation_type == 'SAP':
+            cnn_out_dim = 512
+        elif aggregation_type == 'ASP':
+            cnn_out_dim = 1024
+        elif aggregation_type.endswith('VLAD'):
+            cnn_out_dim = 512
+
+        # 2xC -> 4x128
         self.caps: nn.Module = CapsNetWithoutPrimaryCaps(routing_iterations=3,
-                                                         input_caps=2, input_dim=512,
+                                                         input_caps=2, input_dim=cnn_out_dim,
                                                          output_caps=4, output_dim=128)
-        # 4x128 -> 512 -> 1
-        self.out: nn.Module = nn.Linear(512, 1)
+
+        # C -> 1, or if CapsNet (4*128) -> 1
+        self.out: nn.Module = nn.Linear(cnn_out_dim, 1)
 
         self.train_accuracy = pl.metrics.Accuracy()
         self.val_accuracy = pl.metrics.Accuracy(compute_on_step=False)
@@ -180,6 +190,10 @@ class TwinNet(pl.LightningModule):
         training.add_argument('--max_sample_length', type=int, default=2,
                               help='Maximum length in seconds of samples used, clipped/padded to fit. 0 for no limit.')
 
+        model = parser.add_argument_group('Model')
+        model.add_argument('--n_mels', type=int, default=40)
+        model.add_argument('--aggregation_type', type=str, default='SAP',
+                           help='The aggregation method used in ResNet. Available types: SAP, ASP, NetVLAD, GhostVLAD.')
         return parser
 
     def forward(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
@@ -188,20 +202,19 @@ class TwinNet(pl.LightningModule):
         # print("{0}::{1}".format(x1.shape, x1.size()))
         x2 = self.cnn(x2)
 
-        x1 = F.normalize(x1, p=2, dim=1)
-        x2 = F.normalize(x2, p=2, dim=1)
-        x = torch.stack((x1, x2), dim=1)
-        x, _ = self.caps(x)
-        x = torch.flatten(x, 1)
-        # print(x.shape)
+        # x1 = F.normalize(x1, p=2, dim=1)
+        # x2 = F.normalize(x2, p=2, dim=1)
+        # x = torch.stack((x1, x2), dim=1)
+        # x, _ = self.caps(x)
+        # x = torch.flatten(x, 1)
+        # # print(x.shape)
+        # return self.out(x)
 
         # Using a capsule network instead of a plain distance function...
-        #dist = torch.abs(x1 - x2)
+        dist = torch.abs(x1 - x2)
         #dist = torch.abs(x[0] - x[1])
         #dist = torch.abs(x[:, 0] - x[:, 1])
-
-        #return self.out(dist)
-        return self.out(x)
+        return self.out(dist)
 
     def spectogram_transform(self, x: torch.Tensor, augment: bool = False) -> torch.Tensor:
         with torch.no_grad():

@@ -7,7 +7,7 @@ import torch.nn.functional as F
 
 # GhostVLAD, variant of NetVLAD: https://arxiv.org/abs/1810.09951
 class GhostVLAD(nn.Module):  # pylint: disable=abstract-method
-    def __init__(self, vlad_clusters=8, ghost_clusters=0, alpha=100.0, dim=128, normalize_input=True):
+    def __init__(self, vlad_clusters=8, ghost_clusters=1, alpha=100.0, dim=128, normalize_input=True):
         super().__init__()
         self.K = vlad_clusters
         self.G = ghost_clusters
@@ -44,8 +44,10 @@ class GhostVLAD(nn.Module):  # pylint: disable=abstract-method
             residual *= soft_assign[:, C:C+1, :].unsqueeze(2)
             vlad[:, C:C+1, :] = residual.sum(dim=-1)
 
+        # Intra-normalization (L2 norm, column-wise)
         vlad = F.normalize(vlad, p=2, dim=2)
         vlad = vlad.view(x.size(0), -1)
+        # Full L2 normalization
         vlad = F.normalize(vlad, p=2, dim=1)
         return vlad
 
