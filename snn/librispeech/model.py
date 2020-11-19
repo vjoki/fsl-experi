@@ -207,7 +207,7 @@ class TwinNet(pl.LightningModule):
         return x
 
     def configure_optimizers(self):
-        assert self.num_train == 0 or len(self.train_dataloader()) == self.max_samples
+        assert self.num_train == 0 or len(self.train_dataloader()) == self.num_train
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate)
         scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=self.learning_rate,
                                                         epochs=self.max_epochs,
