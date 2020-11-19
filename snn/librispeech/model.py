@@ -158,22 +158,28 @@ class TwinNet(pl.LightningModule):
     @staticmethod
     def add_model_specific_args(parser: argparse.ArgumentParser):
         parser = argparse.ArgumentParser(parents=[parser], add_help=False)
-        parser.add_argument('--learning_rate', type=float, default=1e-3,
-                            help='Initial learning rate used by auto_lr_find')
-        parser.add_argument('--batch_size', type=int, default=128)
-        parser.add_argument('--num_speakers', type=int, default=0,
-                            help='Limits the # of speakers to train on, 0 to select all.')
-        parser.add_argument('--num_train', type=int, default=0,
-                            help='# of samples to take from training data each epoch, 0 to use all.'
-                            'Use with --augment if value is greater than the amount of training data pairs.')
-        parser.add_argument('--augment', action='store_true', default=False,
-                            help='Augment training data using SpecAugment without time warping.')
-        parser.add_argument('--num_workers', type=int, default=1, help='# of workers used by DataLoader.')
-        parser.add_argument('--data_path', type=str, default='./data/')
-        parser.add_argument('--max_sample_length', type=int, default=2,
-                            help='Maximum length in seconds of samples used, clipped/padded to fit. 0 for no limit.')
-        parser.add_argument('--plot_roc', action='store_true', default=False,
-                            help='Plot ROC curve after testing.')
+
+        general = parser.add_argument_group('General')
+        general.add_argument('--num_workers', type=int, default=1, help='# of workers used by DataLoader.')
+        general.add_argument('--data_path', type=str, default='./data/')
+        general.add_argument('--plot_roc', action='store_true', default=False,
+                             help='Plot ROC curve after testing.')
+        general.add_argument('--rng_seed', type=int, default=1)
+
+        training = parser.add_argument_group('Training/testing')
+        training.add_argument('--learning_rate', type=float, default=1e-3,
+                              help='Initial learning rate used by auto_lr_find')
+        training.add_argument('--batch_size', type=int, default=128)
+        training.add_argument('--num_speakers', type=int, default=0,
+                              help='Limits the # of speakers to train on, 0 to select all.')
+        training.add_argument('--num_train', type=int, default=0,
+                              help='# of samples to take from training data each epoch, 0 to use all.'
+                              'Use with --augment if value is greater than the amount of training data pairs.')
+        training.add_argument('--augment', action='store_true', default=False,
+                              help='Augment training data using SpecAugment without time warping.')
+        training.add_argument('--max_sample_length', type=int, default=2,
+                              help='Maximum length in seconds of samples used, clipped/padded to fit. 0 for no limit.')
+
         return parser
 
     def forward(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:  # type: ignore[override]

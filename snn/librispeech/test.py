@@ -7,9 +7,9 @@ from snn.librispeech.model import TwinNet
 
 def test():
     parser = ArgumentParser()
-    parser.add_argument('--rng_seed', type=int, default=1)
-    parser.add_argument('--log_dir', type=str, default='./lightning_logs/', help='Tensorboard log directory')
-    parser.add_argument('--model_path', type=str, required=True)
+    general = parser.add_argument_group('General')
+    general.add_argument('--log_dir', type=str, default='./lightning_logs/', help='Tensorboard log directory')
+    general.add_argument('--model_path', type=str, required=True)
     parser = TwinNet.add_model_specific_args(parser)
     parser = pl.Trainer.add_argparse_args(parser)
     args = parser.parse_args()
