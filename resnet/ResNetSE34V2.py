@@ -28,7 +28,7 @@ class ResNetSE(nn.Module):  # pylint: disable=abstract-method
         outmap_size = int(self.n_mels/8)
 
         # SAP and ASP share this.
-        if self.encoder_type != "VLAD":
+        if not self.encoder_type.endswith("VLAD"):
             self.attention = nn.Sequential(
                 nn.Conv1d(num_filters[3] * outmap_size, 128, kernel_size=1),
                 nn.ReLU(),
@@ -63,7 +63,7 @@ class ResNetSE(nn.Module):  # pylint: disable=abstract-method
             raise ValueError('Undefined encoder')
 
         # SAP and ASP share this.
-        if self.encoder_type != "VLAD":
+        if not self.encoder_type.endswith("VLAD"):
             print("ResNet -> FC dimensions: {} -> {}.".format(out_dim, nOut))
             self.fc = nn.Linear(out_dim, nOut)
 
@@ -108,7 +108,7 @@ class ResNetSE(nn.Module):  # pylint: disable=abstract-method
         x = self.layer4(x)
 
         # SAP and ASP share this.
-        if self.encoder_type != "VLAD":
+        if not self.encoder_type.endswith("VLAD"):
             x = x.reshape(x.size()[0], -1, x.size()[-1])
             w = self.attention(x)
 
@@ -123,7 +123,7 @@ class ResNetSE(nn.Module):  # pylint: disable=abstract-method
             x = F.normalize(x, p=2, dim=1)
 
         # SAP and ASP share this.
-        if self.encoder_type != "VLAD":
+        if not self.encoder_type.endswith("VLAD"):
             x = x.view(x.size()[0], -1)
             x = self.fc(x)
 
