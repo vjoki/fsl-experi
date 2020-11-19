@@ -170,8 +170,8 @@ class TwinNet(pl.LightningModule):
                             help='Augment training data using SpecAugment without time warping.')
         parser.add_argument('--num_workers', type=int, default=1, help='# of workers used by DataLoader.')
         parser.add_argument('--data_path', type=str, default='./data/')
-        parser.add_argument('--max_sample_length', type=int, default=32000,
-                            help='Maximum length of samples used, clipped to fit. Set to 0 for no limit.')
+        parser.add_argument('--max_sample_length', type=int, default=2,
+                            help='Maximum length in seconds of samples used, clipped/padded to fit. 0 for no limit.')
         parser.add_argument('--plot_roc', action='store_true', default=False,
                             help='Plot ROC curve after testing.')
         return parser
@@ -311,7 +311,8 @@ class TwinNet(pl.LightningModule):
             train_dataset = dset.LIBRISPEECH(self._data_path, url='train-clean-100', download=False)
             val_dataset = dset.LIBRISPEECH(self._data_path, url='dev-clean', download=False)
 
-            self.training_set = PairDataset(train_dataset, n_speakers=self.num_speakers, max_sample_length=self.max_sample_length)
+            self.training_set = PairDataset(train_dataset, n_speakers=self.num_speakers,
+                                            max_sample_length=self.max_sample_length)
             if self.num_train != 0:
                 self.training_sampler = torch.utils.data.RandomSampler(self.training_set, replacement=True,
                                                                        num_samples=self.num_train)

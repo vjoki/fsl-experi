@@ -78,25 +78,25 @@ def pair_speaker_samples(dataset: List[str], randomize: bool,
 
 # Pad shorter and clip longer waveforms and drop redundant channel dimension,
 # since we work with only one channel.
-def process_waveform(waveform, length: Optional[int] = None):
-    wf_len = waveform.size(1)
-    assert wf_len > 0
+def process_waveform(waveform, max_frames_per_sample: Optional[int] = None):
+    num_frames = waveform.size(1)
+    assert num_frames > 0
 
-    if length is None:
-        length = wf_len
+    if max_frames_per_sample is None:
+        max_frames_per_sample = num_frames
 
     # Pad if too small, else pick random starting point for the slice.
-    if wf_len < length:
-        waveform = F.pad(waveform, (0, length - wf_len))  # type: ignore
-        wf_len = waveform.size(1)
+    if num_frames < max_frames_per_sample:
+        waveform = F.pad(waveform, (0, max_frames_per_sample - num_frames))  # type: ignore
+        num_frames = waveform.size(1)
         start = 0
     else:
-        start = np.int64(random.random() * (wf_len - length))
-    assert start + length <= wf_len
+        start = np.int64(random.random() * (num_frames - max_frames_per_sample))
+    assert start + max_frames_per_sample <= num_frames
 
     # Drop channel dimension and clip to length.
-    waveform = waveform.squeeze()[start:start + length]
-    assert waveform.size(0) == length
+    waveform = waveform.squeeze()[start:start + max_frames_per_sample]
+    assert waveform.size(0) == max_frames_per_sample
     return waveform
 
 
@@ -117,12 +117,14 @@ class PairDataset(Dataset):
 
     def __getitem__(self, index):
         (i, j) = self.samples[index]
-        (waveform1, _, _, speaker1, _, _) = self.dataset.__getitem__(i)
+        (waveform1, sample_rate, _, speaker1, _, _) = self.dataset.__getitem__(i)
         (waveform2, _, _, speaker2, _, _) = self.dataset.__getitem__(j)
 
-        waveform1 = process_waveform(waveform1, self._max_length)
-        waveform2 = process_waveform(waveform2, self._max_length)
-        assert self._max_length is None or waveform1.size(0) == waveform2.size(0) == self._max_length
+        max_frames = self._max_length * sample_rate if self._max_length else None
+
+        waveform1 = process_waveform(waveform1, max_frames_per_sample=max_frames)
+        waveform2 = process_waveform(waveform2, max_frames_per_sample=max_frames)
+        assert self._max_length is None or waveform1.size(0) == waveform2.size(0) == max_frames
 
         label = 1.0 if speaker1 == speaker2 else 0.0
         y = torch.as_tensor([label])
@@ -165,15 +167,17 @@ class TripletDataset(Dataset):
         i, j = random.sample(self._speaker_sample_indices[speaker1_id], 2)
         k = random.choice(self._speaker_sample_indices[speaker2_id])
 
-        (waveform1, _, _, speaker1a, _, _) = self.dataset.__getitem__(i)
+        (waveform1, sample_rate, _, speaker1a, _, _) = self.dataset.__getitem__(i)
         (waveform2, _, _, speaker1b, _, _) = self.dataset.__getitem__(j)
         (waveform3, _, _, speaker2, _, _) = self.dataset.__getitem__(k)
         assert speaker1a == speaker1b != speaker2
 
-        waveform1 = process_waveform(waveform1, self._max_length)
-        waveform2 = process_waveform(waveform2, self._max_length)
-        waveform3 = process_waveform(waveform3, self._max_length)
-        assert (self._max_length is None
-                or waveform1.size(0) == waveform2.size(0) == waveform3.size(0) == self._max_length)
+        max_frames = self._max_length * sample_rate if self._max_length else None
+
+        waveform1 = process_waveform(waveform1, max_frames_per_sample=max_frames)
+        waveform2 = process_waveform(waveform2, max_frames_per_sample=max_frames)
+        waveform3 = process_waveform(waveform3, max_frames_per_sample=max_frames)
+        assert (max_frames is None
+                or waveform1.size(0) == waveform2.size(0) == waveform3.size(0) == max_frames)
 
         return (waveform1, waveform2, waveform3)
