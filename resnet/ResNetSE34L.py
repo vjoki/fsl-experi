@@ -1,4 +1,4 @@
-# Thin-ResNet34 (with SE block) implementation from https://github.com/clovaai/voxceleb_trainer
+# Fast-ResNet34 (with SE block) implementation from https://github.com/clovaai/voxceleb_trainer
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -7,46 +7,36 @@ from resnet.vlad import GhostVLAD, NetVLAD
 
 
 class ResNetSE(nn.Module):  # pylint: disable=abstract-method
-    def __init__(self, block, layers, num_filters, nOut, encoder_type='SAP', n_mels=40, **kwargs):
+    def __init__(self, block, layers, num_filters, nOut, encoder_type='SAP', **kwargs):
         super().__init__()
 
-        print('Embedding size is %d, encoder %s.' % (nOut, encoder_type))
+        print('Embedding size is %d, encoder %s.'%(nOut, encoder_type))
 
         self.inplanes = num_filters[0]
         self.encoder_type = encoder_type
-        self.n_mels = n_mels
 
-        # NOTE: Kernel, stride and padding differ from original ResNet.
-        # Also order of ReLU and BN has been swapped.
-        self.conv1 = nn.Conv2d(1, num_filters[0], kernel_size=3, stride=1, padding=1)
-        self.relu = nn.ReLU(inplace=True)
+        self.conv1 = nn.Conv2d(1, num_filters[0], kernel_size=7, stride=(2, 1), padding=3,
+                               bias=False)
         self.bn1 = nn.BatchNorm2d(num_filters[0])
+        self.relu = nn.ReLU(inplace=True)
 
         # NOTE: Max pool removed.
 
         self.layer1 = self._make_layer(block, num_filters[0], layers[0])
         self.layer2 = self._make_layer(block, num_filters[1], layers[1], stride=(2, 2))
         self.layer3 = self._make_layer(block, num_filters[2], layers[2], stride=(2, 2))
-        self.layer4 = self._make_layer(block, num_filters[3], layers[3], stride=(2, 2))
+        self.layer4 = self._make_layer(block, num_filters[3], layers[3], stride=(1, 1))
 
-        # NOTE: Avg pool and BN removed.
-
-        outmap_size = int(self.n_mels/8)
-
-        # SAP and ASP share this.
-        if not self.encoder_type.endswith("VLAD"):
-            self.attention = nn.Sequential(
-                nn.Conv1d(num_filters[3] * outmap_size, 128, kernel_size=1),
-                nn.ReLU(),
-                nn.BatchNorm1d(128),
-                nn.Conv1d(128, num_filters[3] * outmap_size, kernel_size=1),
-                nn.Softmax(dim=2),
-            )
+        # NOTE: Avg pool??? and BN removed.
 
         if self.encoder_type == "SAP":
-            out_dim = num_filters[3] * outmap_size
+            self.sap_linear = nn.Linear(num_filters[3] * block.expansion, num_filters[3] * block.expansion)
+            self.attention = self.new_parameter(num_filters[3] * block.expansion, 1)
+            out_dim = num_filters[3] * block.expansion
         elif self.encoder_type == "ASP":
-            out_dim = num_filters[3] * outmap_size * 2
+            self.sap_linear = nn.Linear(num_filters[3] * block.expansion, num_filters[3] * block.expansion)
+            self.attention = self.new_parameter(num_filters[3] * block.expansion, 1)
+            out_dim = num_filters[3] * block.expansion * 2
         elif self.encoder_type == "NetVLAD":
             vlad_out_dim = 32 * num_filters[3]
             print("ResNet -> VLAD -> FC dimensions: {} -> {} -> {}.".format(num_filters[3], vlad_out_dim, nOut))
@@ -103,39 +93,45 @@ class ResNetSE(nn.Module):  # pylint: disable=abstract-method
 
     def forward(self, x):
         x = self.conv1(x)
-        x = self.relu(x)
         x = self.bn1(x)
+        x = self.relu(x)
 
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
 
-        # SAP and ASP share this.
-        if not self.encoder_type.endswith("VLAD"):
-            x = x.reshape(x.size()[0], -1, x.size()[-1])
-            w = self.attention(x)
+        # Partial avg pooling?
+        x = torch.mean(x, dim=2, keepdim=True)
 
         if self.encoder_type == "SAP":
-            x = torch.sum(x * w, dim=2)
+            # TODO: Whats this?
+            x = x.permute(0, 3, 1, 2).squeeze(-1)
+            h = torch.tanh(self.sap_linear(x))
+            w = torch.matmul(h, self.attention).squeeze(dim=2)
+            w = F.softmax(w, dim=1).view(x.size(0), x.size(1), 1)
+
+            x = torch.sum(x * w, dim=1)
         elif self.encoder_type == "ASP":
-            mu = torch.sum(x * w, dim=2)
-            sg = torch.sqrt((torch.sum((x**2) * w, dim=2) - mu**2).clamp(min=1e-5))
-            x = torch.cat((mu, sg), 1)
+            x = x.permute(0, 3, 1, 2).squeeze(-1)
+            h = torch.tanh(self.sap_linear(x))
+            w = torch.matmul(h, self.attention).squeeze(dim=2)
+            w = F.softmax(w, dim=1).view(x.size(0), x.size(1), 1)
+            mu = torch.sum(x * w, dim=1)
+            rh = torch.sqrt((torch.sum((x**2) * w, dim=1) - mu**2).clamp(min=1e-5))
+            x = torch.cat((mu, rh), 1)
         elif self.encoder_type.endswith("VLAD"):
             x = self.vlad(x)
             x = F.normalize(x, p=2, dim=1)
 
-        # SAP and ASP share this.
-        if not self.encoder_type.endswith("VLAD"):
-            x = x.view(x.size()[0], -1)
-            x = self.fc(x)
+        x = x.view(x.size()[0], -1)
+        x = self.fc(x)
 
         return x
 
 
 def MainModel(nOut=256, **kwargs):
     # Number of filters
-    num_filters = [32, 64, 128, 256]
+    num_filters = [16, 32, 64, 128]
     model = ResNetSE(SEBasicBlock, [3, 4, 6, 3], num_filters, nOut, **kwargs)
     return model
