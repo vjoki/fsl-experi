@@ -38,20 +38,18 @@ def pair_speaker_samples(dataset: List[str], randomize: bool,
             sample2_idx = indices[i+1]
             sample_pairs.append((samples[sample1_idx], samples[sample2_idx]))
 
+    n_same_class_pairs = len(sample_pairs)
+
     # Randomize pairings of different speakers.
     if randomize:
         random.shuffle(speakers)
 
-    unused_samples = 0
+    # Since different speakers have different amount of samples this is going to leave a few unused.
     unused = []
     # Diff class pairs.
     for i in range(0, len(speakers)-1, 2):
         speaker1_samples = speaker_sample_indices[speakers[i]]
         speaker2_samples = speaker_sample_indices[speakers[i+1]]
-
-        # Since different speakers have different amount of samples this is going to leave a few unused.
-        if len(speaker1_samples) != len(speaker2_samples):
-            unused_samples += abs(len(speaker1_samples) - len(speaker2_samples))
 
         # Randomize paired samples.
         if randomize:
@@ -67,11 +65,17 @@ def pair_speaker_samples(dataset: List[str], randomize: bool,
 
         sample_pairs.extend(zip(speaker1_samples, speaker2_samples))
 
+    n_diff_class_pairs = len(sample_pairs) - n_same_class_pairs
+
     # Add all the pairs that were left over.
-    assert unused_samples == len(unused)
     sample_pairs.extend(zip(unused[::2], unused[1::2]))
 
-    print("Collected {} sample pairs.".format(len(sample_pairs)))
+    print("Collected {} sample pairs. {} speakers. {} same speaker pairs. {} different speaker pairs. {} mixed pairs."
+          .format(len(sample_pairs),
+                  n_speakers,
+                  n_same_class_pairs,
+                  n_diff_class_pairs,
+                  len(unused)))
 
     return sample_pairs
 
@@ -109,14 +113,14 @@ class PairDataset(Dataset):
                  randomize: bool = True):
         super().__init__()
         self.dataset: Final = dataset
-        self.samples: Final = pair_speaker_samples(dataset._walker, randomize=randomize, n_speakers=n_speakers)
+        self.pairs: Final = pair_speaker_samples(dataset._walker, randomize=randomize, n_speakers=n_speakers)
         self._max_length: Final = max_sample_length
 
     def __len__(self):
-        return len(self.samples)
+        return len(self.pairs)
 
     def __getitem__(self, index):
-        (i, j) = self.samples[index]
+        (i, j) = self.pairs[index]
         (waveform1, sample_rate, _, speaker1, _, _) = self.dataset.__getitem__(i)
         (waveform2, _, _, speaker2, _, _) = self.dataset.__getitem__(j)
 
