@@ -7,7 +7,7 @@ from snn.librispeech.model import TwinNet, train_and_test
 def train():
     parser = ArgumentParser()
     general = parser.add_argument_group('General')
-    general.add_argument('--early_stop', type=bool, default=False, help='Enables early stopping')
+    general.add_argument('--early_stop', action='store_true', default=False, help='Enable early stopping')
     general.add_argument('--early_stop_min_delta', type=int, default=1e-8,
                          help='Minimum change in val_loss quantity to qualify as an improvement')
     general.add_argument('--early_stop_patience', type=int, default=15,
