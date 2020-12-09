@@ -363,6 +363,9 @@ class TwinNet(pl.LightningModule):
             test_dataset = dset.LIBRISPEECH(self._data_path, url='test-clean', download=False)
             self.test_set = PairDataset(test_dataset, max_sample_length=self.max_sample_length)
 
+    def worker_init(self, worker_id):
+        pl.seed_everything(worker_id + self.rng_seed)
+
     def train_dataloader(self) -> DataLoader:
         return DataLoader(
             self.training_set, batch_size=self.batch_size,
@@ -370,15 +373,15 @@ class TwinNet(pl.LightningModule):
             num_workers=self._num_workers, pin_memory=self._pin_memory,
             sampler=self.training_sampler,
             collate_fn=self._collate_fn,  # type: ignore
-            worker_init_fn=lambda worker_id: pl.seed_everything(worker_id + self.rng_seed)  # type: ignore
+            worker_init_fn=self.worker_init  # type: ignore
         )
 
     def val_dataloader(self) -> Union[DataLoader, List[DataLoader]]:
         return DataLoader(
-            self.validation_set, batch_size=self.batch_size, shuffle=False,
+            self.validation_set, batch_size=self.batch_size, shuffle=True,
             num_workers=self._num_workers, pin_memory=self._pin_memory,
             collate_fn=self._collate_fn,  # type: ignore
-            worker_init_fn=lambda worker_id: pl.seed_everything(worker_id + self.rng_seed)  # type: ignore
+            worker_init_fn=self.worker_init  # type: ignore
         )
 
     def test_dataloader(self) -> Union[DataLoader, List[DataLoader]]:
@@ -386,7 +389,7 @@ class TwinNet(pl.LightningModule):
             self.test_set, batch_size=self.batch_size, shuffle=False,
             num_workers=self._num_workers, pin_memory=self._pin_memory,
             collate_fn=self._collate_fn,  # type: ignore
-            worker_init_fn=lambda worker_id: pl.seed_everything(worker_id + self.rng_seed)  # type: ignore
+            worker_init_fn=self.worker_init  # type: ignore
         )
 
 
