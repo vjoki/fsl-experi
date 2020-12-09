@@ -5,8 +5,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchaudio
+torchaudio.USE_SOUNDFILE_LEGACY_INTERFACE = False
 import torchaudio.datasets as dset
 import pytorch_lightning as pl
+import numpy as np
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
@@ -16,10 +18,63 @@ from torch.utils.data import DataLoader, Sampler
 from torch.utils.data.dataset import Dataset
 import matplotlib.pyplot as plt
 
-from snn.librispeech.data_loader import PairDataset, TripletDataset
-from resnet.ResNetSE34V2 import MainModel as ResNet
-from resnet.utils import PreEmphasis
-from capsnet.CapsNet import CapsNetWithoutPrimaryCaps, MarginLoss
+# from pytorch_metric_learning.losses import ContrastiveLoss
+# from pytorch_metric_learning.distances import LpDistance
+from snn.librispeech.data_loader import PairDataset, TripletDataset, NShotKWayDataset
+from resnet.ResNetSE34V2 import MainModel as ThinResNet
+from resnet.ResNetSE34L import MainModel as FastResNet
+from resnet.utils import accuracy, PreEmphasis
+from capsnet.CapsNet import CapsNetWithoutPrimaryCaps
+
+
+# Adapted from https://github.com/clovaai/voxceleb_trainer/
+class AngularPrototypicalLoss(nn.Module):
+    def __init__(self, init_scale=10.0, init_bias=-5.0):
+        super().__init__()
+        self.w = nn.Parameter(torch.as_tensor(init_scale))
+        self.b = nn.Parameter(torch.as_tensor(init_bias))
+        self.criterion = torch.nn.CrossEntropyLoss()
+
+    def forward(self, query, support, label=None):
+        # B = batch, W = way = speaker, S = shot, N = features
+        # query shape is BxN.
+        # support shape is BxWxSxN, where WxS signifies the mini-batch.
+        assert support.size(1) >= 2
+        #print(support.shape)
+        #print(label.shape)
+
+        # Average support set shots.
+        # out_anchor = prototype = centroid
+        centroid = torch.mean(support, 2)  # BxWxN
+        #print(centroid.shape, query.shape)
+
+        # Cosine similarity needs both inputs to be the same shape.
+        query = query.unsqueeze(-2).repeat(1, centroid.size(1), 1)  # BxWxN
+
+        # Feature dimension (N) wise cosine similiarity.
+        cos_sim_matrix = F.cosine_similarity(query, centroid, dim=2)  # BxW
+
+        # TODO: Why is w clamped?
+        torch.clamp(self.w, 1e-6)
+        cos_sim_matrix = self.w * cos_sim_matrix + self.b  # BxW
+
+        # print(cos_sim_matrix.shape, label.shape)
+        # losses = []
+        # for i in range(0, label.size(1)):
+        #     losses.append(self.criterion(cos_sim_matrix, label[:, i]))
+        # nloss = torch.mean(torch.stack(losses))
+
+
+        # We assume that the first support set is the query speaker, thus target class is always 0.
+        #label = torch.zeros(centroid.size(0), dtype=torch.long, device=query.device)
+        if label is None:
+            #label = torch.arange(0, centroid.size(0), dtype=torch.long, device=query.device)
+            label = torch.zeros(centroid.size(0), dtype=torch.long, device=query.device)
+        #label[0] = 1
+        nloss = self.criterion(cos_sim_matrix, label)
+        #print(nloss, nloss.shape, cos_sim_matrix.shape, label.shape)
+
+        return nloss, cos_sim_matrix, label
 
 
 def minDCF(fpr, fnr, thresholds, p_target: float = 0.05, c_miss: int = 1, c_fa: int = 1):
@@ -64,7 +119,7 @@ def compute_evaluation_metrics(outputs: List[List[torch.Tensor]],
                                                             torch.Tensor, torch.Tensor, torch.Tensor]:
     scores = torch.cat(list((scores for step in outputs for scores in step[0])))
     # NOTE: Need sigmoid here because we skip the sigmoid in forward() due to using BCE with logits for loss.
-    scores = torch.sigmoid(scores)
+    #scores = torch.sigmoid(scores)
     labels = torch.cat(list((labels for step in outputs for labels in step[1])))
     auc = auroc(scores, labels, pos_label=1)
     fpr, tpr, thresholds = roc(scores, labels, pos_label=1)
@@ -143,10 +198,12 @@ class TwinNet(pl.LightningModule):
                                                  window_fn=torch.hamming_window, n_mels=n_mels)
         )
 
+        self.loss_fn = AngularPrototypicalLoss()
+
         self.augment_spectrogram: Optional[nn.Module] = None
         if self.augment:
-            F = 0.25
-            T = 0.15
+            F = 0.20
+            T = 0.10
             self.augment_spectrogram = torch.nn.Sequential(
                 torchaudio.transforms.FrequencyMasking(freq_mask_param=int(F * n_mels)),
                 torchaudio.transforms.FrequencyMasking(freq_mask_param=int(F * n_mels)),
@@ -155,7 +212,8 @@ class TwinNet(pl.LightningModule):
             )
 
         # waveform -> MelSpectrogram (n_fft=512, n_mels) -> C
-        self.cnn: nn.Module = ResNet(nOut=512, encoder_type=aggregation_type, n_mels=n_mels)
+        self.cnn: nn.Module = FastResNet(nOut=512, encoder_type=aggregation_type)
+        # self.cnn: nn.Module = ThinResNet(nOut=512, encoder_type=aggregation_type, n_mels=n_mels)
 
         if aggregation_type == 'SAP':
             cnn_out_dim = 512
@@ -212,25 +270,27 @@ class TwinNet(pl.LightningModule):
                            help='The aggregation method used in ResNet. Available types: SAP, ASP, NetVLAD, GhostVLAD.')
         return parser
 
-    def forward(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
-        # print(x1.shape)
-        x1 = self.cnn(x1)
-        # print("{0}::{1}".format(x1.shape, x1.size()))
-        x2 = self.cnn(x2)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
+        return self.cnn(x)
+    # def forward(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
+    #     # print(x1.shape)
+    #     x1 = self.cnn(x1)
+    #     # print("{0}::{1}".format(x1.shape, x1.size()))
+    #     x2 = self.cnn(x2)
 
-        # x1 = F.normalize(x1, p=2, dim=1)
-        # x2 = F.normalize(x2, p=2, dim=1)
-        # x = torch.stack((x1, x2), dim=1)
-        # x, _ = self.caps(x)
-        # x = torch.flatten(x, 1)
-        # # print(x.shape)
-        # return self.out(x)
+    #     # x1 = F.normalize(x1, p=2, dim=1)
+    #     # x2 = F.normalize(x2, p=2, dim=1)
+    #     # x = torch.stack((x1, x2), dim=1)
+    #     # x, _ = self.caps(x)
+    #     # x = torch.flatten(x, 1)
+    #     # # print(x.shape)
+    #     # return self.out(x)
 
-        # Using a capsule network instead of a plain distance function...
-        dist = torch.abs(x1 - x2)
-        #dist = torch.abs(x[0] - x[1])
-        #dist = torch.abs(x[:, 0] - x[:, 1])
-        return self.out(dist)
+    #     # Using a capsule network instead of a plain distance function...
+    #     dist = torch.abs(x1 - x2)
+    #     #dist = torch.abs(x[0] - x[1])
+    #     #dist = torch.abs(x[:, 0] - x[:, 1])
+    #     return self.out(dist)
 
     def spectogram_transform(self, x: torch.Tensor, augment: bool = False) -> torch.Tensor:
         with torch.no_grad():
@@ -247,35 +307,67 @@ class TwinNet(pl.LightningModule):
         scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=self.learning_rate,
                                                         epochs=self.max_epochs,
                                                         steps_per_epoch=len(self.train_dataloader()))
-        return [optimizer], [{'scheduler': scheduler, 'monitor': 'val_loss', 'interval': 'step'}]
+        return [optimizer], [{'scheduler': scheduler, 'monitor': 'val_eer', 'interval': 'step'}]
 
     @staticmethod
     def loss(x: torch.Tensor, y: torch.Tensor):
         return F.binary_cross_entropy_with_logits(x, y)
 
     def training_step(self,  # type: ignore[override]
-                      batch: Union[Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
-                                   Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]],
+                      batch: Tuple[torch.Tensor, List[List[torch.Tensor]], torch.Tensor],
                       batch_idx: int) -> torch.Tensor:
-        if self.max_sample_length is None:
-            x1, x2, lengths, y = cast(Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor], batch)
-            # TODO: Do something to ignore padding?
-        else:
-            x1, x2, y = cast(Tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch)
+        query, support_sets, labels = batch
 
-        x1 = self.spectogram_transform(x1, augment=self.augment)
-        x2 = self.spectogram_transform(x2, augment=self.augment)
-        out = self(x1, x2)
-        loss = self.loss(out, y)
+        qx = self.spectogram_transform(query, augment=self.augment)
+        query = self.cnn(qx)
 
-        acc = self.train_accuracy(out, y)
+        supports = []
+        for shots in support_sets:
+            s = []
+            for waveform in shots:
+                x = self.spectogram_transform(waveform, augment=self.augment)
+                s.append(self.cnn(x))
+            supports.append(torch.stack(s, dim=1))
+
+            support = torch.stack(supports, dim=1)
+
+        loss, cos_sim_matrix, label = self.loss_fn(query, support)
+        acc = accuracy(cos_sim_matrix, label, topk=(1,))[0]
+
+        # acc = self.train_accuracy(out, y)
         self.log('train_acc_step', acc, on_step=True, on_epoch=False)
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=False, logger=True)
+        # self.log('train_label_avg', y.mean(), on_step=True, on_epoch=True)
 
         return loss
 
-    def training_epoch_end(self, training_step_outputs: List[Any]):
-        self.log('train_acc_epoch', self.train_accuracy.compute())
+    # def training_step(self,  # type: ignore[override]
+    #                   batch: Union[Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+    #                                Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]],
+    #                   batch_idx: int) -> torch.Tensor:
+    #     if self.max_sample_length is None:
+    #         x1, x2, lengths, y = cast(Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor], batch)
+    #         # TODO: Do something to ignore padding?
+    #     else:
+    #         x1, x2, y = cast(Tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch)
+
+    #     x1 = self.spectogram_transform(x1, augment=self.augment)
+    #     x2 = self.spectogram_transform(x2, augment=self.augment)
+    #     out = self(x1, x2)
+
+    #     # dist = F.pairwise_distance(x1, x2, keepdim=True)
+    #     # loss = torch.mean((1.0 - y) * torch.pow(dist, 2) + y * torch.pow(torch.clamp(1.0 - dist, min=0.0), 2))
+    #     loss = self.loss(out, y)
+
+    #     acc = self.train_accuracy(out, y)
+    #     self.log('train_acc_step', acc, on_step=True, on_epoch=False)
+    #     self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=False, logger=True)
+    #     self.log('train_label_avg', y.mean(), on_step=True, on_epoch=True)
+
+    #     return loss
+
+    # def training_epoch_end(self, training_step_outputs: List[Any]):
+    #     self.log('train_acc_epoch', self.train_accuracy.compute())
 
     def validation_step(self,  # type: ignore[override]
                         batch: Union[Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
@@ -289,11 +381,34 @@ class TwinNet(pl.LightningModule):
 
         x1 = self.spectogram_transform(x1)
         x2 = self.spectogram_transform(x2)
-        out = self(x1, x2)
-        loss = self.loss(out, y)
+        #out = self(x1, x2)
 
-        self.val_accuracy(out, y)
+        x1 = self.cnn(x1)
+        x2 = self.cnn(x2)
+        x1 = F.normalize(x1, p=2, dim=1)
+        x2 = F.normalize(x2, p=2, dim=1)
+        out = F.pairwise_distance(x1, x2, keepdim=True)
+        #out = torch.mean(dist)
+        #out = 1 - F.normalize(dist, p=2, dim=1)
+
+        # x1 = self.cnn(x1)
+        # x2 = self.cnn(x2)
+        # x2 = torch.stack([x2], dim=1).unsqueeze(2)
+        # long_y = y.squeeze(1).long()
+        # loss, out, label = self.loss_fn(x1, x2, long_y)
+        # acc = accuracy(out, label, topk=(1,))[0]
+        # out = torch.mean(out, 1, keepdim=True)
+        # self.log('val_acc', acc, on_step=True, on_epoch=True)
+
+        ## dist = F.pairwise_distance(x1, x2, keepdim=True)
+        loss = torch.mean((1.0 - y) * torch.pow(out, 2) + y * torch.pow(torch.clamp(1.0 - out, min=0.0), 2))
+        #loss = self.loss(out, y)
+
+        self.val_accuracy(out, 1 - y)
         self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
+
+        # eer, _, _, _, _ = compute_evaluation_metrics([[out, y]])
+        # self.log('val_eer', eer, on_step=False, on_epoch=True, prog_bar=True)
 
         return [out, y]
 
@@ -324,10 +439,34 @@ class TwinNet(pl.LightningModule):
 
         x1 = self.spectogram_transform(x1)
         x2 = self.spectogram_transform(x2)
-        out = self(x1, x2)
-        loss = self.loss(out, y)
+        #out = self(x1, x2)
 
-        self.test_accuracy(out, y)
+        x1 = self.cnn(x1)
+        x2 = self.cnn(x2)
+        #print('x', x1, x2)
+        x1 = F.normalize(x1, p=2, dim=1)
+        x2 = F.normalize(x2, p=2, dim=1)
+        out = F.pairwise_distance(x1, x2, keepdim=True)
+        #print('out', out)
+        #print('y', y)
+        #out = torch.mean(dist)
+        #out = 1 - F.normalize(dist, p=2, dim=1)
+
+        # x1 = self.cnn(x1)
+        # x2 = self.cnn(x2)
+        # x2 = torch.stack([x2], dim=1).unsqueeze(2)
+        # long_y = y.squeeze(1).long()
+        # loss, out, label = self.loss_fn(x1, x2, long_y)
+        # acc = accuracy(out, label, topk=(1,))[0]
+        # out = torch.mean(out, 1, keepdim=True)
+        # self.log('test_acc_step', acc, on_step=True, on_epoch=False)
+
+        # dist = F.pairwise_distance(x1, x2, keepdim=True)
+        # loss = torch.mean((1.0 - y) * torch.pow(dist, 2) + y * torch.pow(torch.clamp(1.0 - dist, min=0.0), 2))
+        loss = torch.mean((1.0 - y) * torch.pow(out, 2) + y * torch.pow(torch.clamp(1.0 - out, min=0.0), 2))
+        #loss = self.loss(out, y)
+
+        self.test_accuracy(out, 1 - y)
         self.log('test_loss', loss, on_step=False, on_epoch=True)
 
         return [out, y]
@@ -352,11 +491,13 @@ class TwinNet(pl.LightningModule):
             train_dataset = dset.LIBRISPEECH(self._data_path, url='train-clean-100', download=False)
             val_dataset = dset.LIBRISPEECH(self._data_path, url='dev-clean', download=False)
 
-            self.training_set = PairDataset(train_dataset, n_speakers=self.num_speakers,
-                                            max_sample_length=self.max_sample_length)
-            if self.num_train != 0:
-                self.training_sampler = torch.utils.data.RandomSampler(self.training_set, replacement=True,
-                                                                       num_samples=self.num_train)
+            self.training_set = NShotKWayDataset(train_dataset, num_shots=1, num_ways=5,
+                                                 max_sample_length=self.max_sample_length)
+            # self.training_set = PairDataset(train_dataset, n_speakers=self.num_speakers,
+            #                                 max_sample_length=self.max_sample_length)
+            # if self.num_train != 0:
+            #     self.training_sampler = torch.utils.data.RandomSampler(self.training_set, replacement=True,
+            #                                                            num_samples=self.num_train)
 
             self.validation_set = PairDataset(val_dataset, max_sample_length=self.max_sample_length)
         if stage == 'test' or stage is None:
@@ -422,8 +563,9 @@ def train_and_test(args: argparse.Namespace):
 
     logger = TensorBoardLogger(log_dir, name='snn')
     trainer = pl.Trainer.from_argparse_args(args, logger=logger, progress_bar_refresh_rate=20,
-                                            deterministic=True, auto_lr_find=True,
+                                            deterministic=True, auto_lr_find=False,
                                             checkpoint_callback=checkpoint_callback,
+                                            terminate_on_nan=True,
                                             callbacks=callbacks)
     model = TwinNet(**dict_args)
 
