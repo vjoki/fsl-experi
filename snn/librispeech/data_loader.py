@@ -74,7 +74,7 @@ def pair_speaker_samples(dataset: List[str], randomize: bool,
 
     print("Collected {} sample pairs. {} speakers. {} same speaker pairs. {} different speaker pairs. {} mixed pairs."
           .format(len(sample_pairs),
-                  n_speakers,
+                  n_speakers if n_speakers else len(speakers),
                   n_same_class_pairs,
                   n_diff_class_pairs,
                   len(unused)))
@@ -85,7 +85,11 @@ def pair_speaker_samples(dataset: List[str], randomize: bool,
 # Pad shorter and clip longer waveforms and drop redundant channel dimension,
 # since we work with only one channel.
 def process_waveform(waveform, max_frames_per_sample: Optional[int] = None):
-    num_frames = waveform.size(1)
+    if waveform.dim() >= 2:
+        assert waveform.size(0) == 1
+        waveform = waveform.squeeze()
+
+    num_frames = waveform.size(0)
     assert num_frames > 0
 
     if max_frames_per_sample is None:
@@ -94,14 +98,14 @@ def process_waveform(waveform, max_frames_per_sample: Optional[int] = None):
     # Pad if too small, else pick random starting point for the slice.
     if num_frames < max_frames_per_sample:
         waveform = F.pad(waveform, (0, max_frames_per_sample - num_frames))  # type: ignore
-        num_frames = waveform.size(1)
+        num_frames = waveform.size(0)
         start = 0
     else:
-        start = np.int64(random.random() * (num_frames - max_frames_per_sample))
+        start = int(random.random() * (num_frames - max_frames_per_sample))
     assert start + max_frames_per_sample <= num_frames
 
     # Drop channel dimension and clip to length.
-    waveform = waveform.squeeze()[start:start + max_frames_per_sample]
+    waveform = waveform[start:start + max_frames_per_sample]
     assert waveform.size(0) == max_frames_per_sample
     return waveform
 
