@@ -406,15 +406,14 @@ def train_and_test(args: argparse.Namespace):
     if early_stop:
         # Should give enough time for lr_scheduler to try do it's thing.
         callbacks.append(EarlyStopping(
-            monitor='val_loss', mode='min',
+            monitor='val_eer', mode='min',
             min_delta=early_stop_min_delta, patience=early_stop_patience,
             verbose=True, strict=True
         ))
 
     checkpoint_callback = ModelCheckpoint(
-        # TODO: Is low val_loss the best choice for choosing the best model?
-        monitor='val_loss', mode='min',
-        filepath='./checkpoints/snn-librispeech-{epoch}-{val_loss:.2f}',
+        monitor='val_eer', mode='min',
+        filepath='./checkpoints/snn-librispeech-{epoch}-{val_eer:.2f}',
         save_top_k=3
     )
 
