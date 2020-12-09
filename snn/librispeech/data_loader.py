@@ -9,6 +9,7 @@ import torch.nn.functional as F
 import torchaudio
 import torchaudio.datasets as dset
 from torch.utils.data.dataset import Dataset
+from audiomentations import Compose, AddGaussianSNR, AddGaussianNoise, AddImpulseResponse, AddShortNoises
 
 
 def pair_speaker_samples(dataset: List[str], randomize: bool,
@@ -112,15 +113,24 @@ def process_waveform(waveform, max_frames_per_sample: Optional[int] = None):
 
 # FIXME: Dataset classes should be refactored to have no state/rng.
 #        Randomization should happen in the DataLoader/Sampler.
+# 1-shot 1-way.
 class PairDataset(Dataset):
     def __init__(self, dataset: dset.LIBRISPEECH,
                  n_speakers: Optional[int] = None,
                  max_sample_length: Optional[int] = None,
+                 rir_path: str = './data/RIRS_NOISES/',
+                 augment: bool = False,
                  randomize: bool = True):
         super().__init__()
         self.dataset: Final = dataset
         self.pairs: Final = pair_speaker_samples(dataset._walker, randomize=randomize, n_speakers=n_speakers)
         self._max_length: Final = max_sample_length
+        self._augment: Final = augment
+        self._transform: Final = Compose([
+            AddGaussianSNR(min_SNR=0.2, max_SNR=0.5, p=0.5),
+            AddImpulseResponse(os.path.join(rir_path, 'real_rirs_isotropic_noises'), p=0.5),
+            AddShortNoises(os.path.join(rir_path, 'pointsource_noises'), p=0.5)
+        ])
 
     def __len__(self):
         return len(self.pairs)
@@ -129,8 +139,16 @@ class PairDataset(Dataset):
         (i, j) = self.pairs[index]
         (waveform1, sample_rate, _, speaker1, _, _) = self.dataset.__getitem__(i)
         (waveform2, _, _, speaker2, _, _) = self.dataset.__getitem__(j)
+        assert waveform1.device.type == waveform2.device.type == "cpu"
 
         max_frames = self._max_length * sample_rate if self._max_length else None
+
+        if self._augment:
+            assert waveform1.size(0) == waveform2.size(0) == 1
+            waveform1 = waveform1.squeeze()
+            waveform1 = torch.from_numpy(self._transform(waveform1.t().numpy(), sample_rate=sample_rate))
+            waveform2 = waveform2.squeeze()
+            waveform2 = torch.from_numpy(self._transform(waveform2.t().numpy(), sample_rate=sample_rate))
 
         waveform1 = process_waveform(waveform1, max_frames_per_sample=max_frames)
         waveform2 = process_waveform(waveform2, max_frames_per_sample=max_frames)
@@ -138,6 +156,7 @@ class PairDataset(Dataset):
 
         label = 1.0 if speaker1 == speaker2 else 0.0
         y = torch.as_tensor([label])
+        assert waveform1.device.type == waveform2.device.type == y.device.type == "cpu"
         return (waveform1, waveform2, y)
 
 
