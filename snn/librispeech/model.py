@@ -393,7 +393,7 @@ class TwinNet(pl.LightningModule):
 
     def val_dataloader(self) -> Union[DataLoader, List[DataLoader]]:
         return DataLoader(
-            self.validation_set, batch_size=self.batch_size, shuffle=True,
+            self.validation_set, batch_size=self.batch_size, shuffle=False,
             num_workers=self._num_workers, pin_memory=self._pin_memory,
             collate_fn=self._collate_fn,  # type: ignore
             worker_init_fn=self.worker_init  # type: ignore
