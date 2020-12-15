@@ -17,7 +17,7 @@ from torch.utils.data.dataset import Dataset
 
 # from pytorch_metric_learning.losses import ContrastiveLoss
 # from pytorch_metric_learning.distances import LpDistance
-from snn.librispeech.data_loader import PairDataset, TripletDataset, NShotKWayDataset
+from snn.librispeech.data_loader import PairDataset, TripletDataset, NShotKWayDataset, NShotKWayDatasetNoQ
 from snn.librispeech.utils import collate_var_len_tuples_fn, compute_evaluation_metrics
 from snn.librispeech.loss.angularproto import AngularPrototypicalLoss
 from resnet.ResNetSE34V2 import MainModel as ThinResNet
