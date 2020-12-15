@@ -12,15 +12,13 @@ import numpy as np
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from pytorch_lightning.metrics.functional import roc
-from pytorch_lightning.metrics.functional.classification import auroc
 from torch.utils.data import DataLoader, Sampler
 from torch.utils.data.dataset import Dataset
-import matplotlib.pyplot as plt
 
 # from pytorch_metric_learning.losses import ContrastiveLoss
 # from pytorch_metric_learning.distances import LpDistance
 from snn.librispeech.data_loader import PairDataset, TripletDataset, NShotKWayDataset
+from snn.librispeech.utils import collate_var_len_tuples_fn, compute_evaluation_metrics
 from resnet.ResNetSE34V2 import MainModel as ThinResNet
 from resnet.ResNetSE34L import MainModel as FastResNet
 from resnet.utils import accuracy, PreEmphasis
@@ -75,82 +73,6 @@ class AngularPrototypicalLoss(nn.Module):
         #print(nloss, nloss.shape, cos_sim_matrix.shape, label.shape)
 
         return nloss, cos_sim_matrix, label
-
-
-def minDCF(fpr, fnr, thresholds, p_target: float = 0.05, c_miss: int = 1, c_fa: int = 1):
-    c_det = (c_miss * p_target * fnr) + (c_fa * (1 - p_target) * fpr)
-    min_c_det_idx = torch.argmin(c_det)
-    min_c_det = c_det[min_c_det_idx]
-    min_c_det_threshold = thresholds[min_c_det_idx]
-
-    c_def = min(c_miss * p_target, c_fa * (1 - p_target))
-    min_dcf = min_c_det / c_def
-
-    return min_dcf, min_c_det_threshold
-
-
-def equal_error_rate(fpr: torch.Tensor, fnr: torch.Tensor,
-                     thresholds: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    # Index of the nearest intersection point.
-    idx = torch.argmin(torch.abs(fnr - fpr))
-
-    # roc() can return fpr, tpr, thresholds with much shorter length than scores.size(0)
-    # (e.g. cases where scores.size(0) = 2611 and fnr.size(0) = 4), which leads to a large
-    # differences between fpr[e] and fnr[e]. Thus we take the mean of fpr[e] and fnr[e] as a
-    # good enough approximation. Could also interpolate using scipy brentq and interp1d methods,
-    # but this on the other hand leads to frequent division by zero errors in some cases.
-    eer = 0.5 * (fpr[idx] + fnr[idx])
-    eer_threshold = thresholds[idx]
-
-    # https://yangcha.github.io/EER-ROC/
-    # https://stackoverflow.com/questions/28339746/equal-error-rate-in-python
-    # Unfortunately this seems to fail frequently, incorrectly returning 0.0 and nan.
-    #
-    # from scipy.optimize import brentq
-    # from scipy.interpolate import interp1d
-    # eer = brentq(lambda x: 1. - x - interp1d(fpr, tpr)(x), 0., 1.)
-    # eer_threshold = interp1d(fpr, thresholds)(eer)
-
-    return eer, eer_threshold, idx
-
-
-def compute_evaluation_metrics(outputs: List[List[torch.Tensor]],
-                               plot: bool = False) -> Tuple[torch.Tensor, torch.Tensor,
-                                                            torch.Tensor, torch.Tensor, torch.Tensor]:
-    scores = torch.cat(list((scores for step in outputs for scores in step[0])))
-    # NOTE: Need sigmoid here because we skip the sigmoid in forward() due to using BCE with logits for loss.
-    #scores = torch.sigmoid(scores)
-    labels = torch.cat(list((labels for step in outputs for labels in step[1])))
-    auc = auroc(scores, labels, pos_label=1)
-    fpr, tpr, thresholds = roc(scores, labels, pos_label=1)
-    fnr = 1 - tpr
-
-    eer, eer_threshold, idx = equal_error_rate(fpr, fnr, thresholds)
-    min_dcf, min_dcf_threshold = minDCF(fpr, fnr, thresholds)
-
-    if plot:
-        fpr = fpr.cpu().numpy()
-        tpr = tpr.cpu().numpy()
-        plt.xlabel('False positive rate')
-        plt.ylabel('True positive rate')
-        plt.plot([0, 1], [0, 1], 'r--', label='Reference', alpha=0.6)
-        plt.plot([1, 0], [0, 1], 'k--', label='EER line', alpha=0.6)
-        plt.plot(fpr, tpr, label='ROC curve')
-        plt.fill_between(fpr, tpr, 0, label='AUC', color='0.8')
-        plt.plot(fpr[idx], tpr[idx], 'ko', label='EER = {:.2f}%'.format(eer * 100))  # EER point
-        plt.legend()
-        plt.show()
-
-    return eer, eer_threshold, auc, min_dcf, min_dcf_threshold
-
-
-def collate_var_len_tuples_fn(batch):
-    a, b, labels = zip(*batch)
-    lengths = torch.as_tensor(list(map(lambda t1, t2: (t1.size(0), t2.size(0)), a, b)))
-    a = torch.nn.utils.rnn.pad_sequence(a, batch_first=True)
-    b = torch.nn.utils.rnn.pad_sequence(b, batch_first=True)
-    return a, b, lengths, torch.utils.data.dataloader.default_collate(labels)
-
 
 class TwinNet(pl.LightningModule):
     # NOTE: Defaults here shouldn't really matter much, they're just here to make initializing the model
