@@ -19,9 +19,9 @@ dependencies:
   - scipy=1.5.*
   - matplotlib=3.3
   - pytorch::pytorch=1.7
-  - conda-forge::pytorch-lightning=1.0
-  - metric-learning::pytorch-metric-learning=0.9.93
-  - tensorboard=2.2
+  - conda-forge::pytorch-lightning=1.1.*
+  - metric-learning::pytorch-metric-learning=0.9.*
+  - tensorboard=2.3
   - pytorch::torchvision=0.8
   - pytorch::torchaudio=0.7
   - conda-forge::sox=14.4

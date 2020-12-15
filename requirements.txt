@@ -1,4 +1,7 @@
 Augmentor
 audiomentations
+torch-audiomentations
 librosa
 PyWavelets
+higher
+torchmeta
