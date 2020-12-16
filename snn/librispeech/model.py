@@ -443,7 +443,7 @@ def train_and_test(args: argparse.Namespace):
 
     logger = TensorBoardLogger(log_dir, name='snn')
     trainer = pl.Trainer.from_argparse_args(args, logger=logger, progress_bar_refresh_rate=20,
-                                            deterministic=True, auto_lr_find=False,
+                                            deterministic=True, auto_lr_find=True,
                                             checkpoint_callback=checkpoint_callback,
                                             terminate_on_nan=True,
                                             callbacks=callbacks)
