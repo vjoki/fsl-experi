@@ -193,12 +193,9 @@ class TwinNet(pl.LightningModule):
         return F.binary_cross_entropy_with_logits(x, y)
 
     def training_step(self,  # type: ignore[override]
-                      batch: Tuple[torch.Tensor, List[List[torch.Tensor]], torch.Tensor],
+                      batch: Tuple[List[List[torch.Tensor]], torch.Tensor],
                       batch_idx: int) -> torch.Tensor:
-        query, support_sets, labels = batch
-
-        qx = self.spectogram_transform(query, augment=self.augment)
-        query = self.cnn(qx)
+        support_sets, labels = batch
 
         supports = []
         for shots in support_sets:
@@ -206,11 +203,11 @@ class TwinNet(pl.LightningModule):
             for waveform in shots:
                 x = self.spectogram_transform(waveform, augment=self.specaugment)
                 s.append(self.cnn(x))
-            supports.append(torch.stack(s, dim=1))
+            supports.append(torch.cat(s, dim=0))
 
-            support = torch.stack(supports, dim=1)
+        support = torch.stack(supports, dim=0)
 
-        loss, cos_sim_matrix, label = self.loss_fn(query, support)
+        loss, cos_sim_matrix, label = self.loss_fn(support)
         acc = accuracy(cos_sim_matrix, label, topk=(1,))[0]
 
         # acc = self.train_accuracy(out, y)
@@ -389,7 +386,7 @@ class TwinNet(pl.LightningModule):
 
     def train_dataloader(self) -> DataLoader:
         return DataLoader(
-            self.training_set, batch_size=self.batch_size,
+            self.training_set, batch_size=1,
             shuffle=self.training_sampler is None,
             num_workers=self._num_workers, pin_memory=self._pin_memory,
             sampler=self.training_sampler,
