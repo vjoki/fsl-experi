@@ -1,10 +1,12 @@
 from argparse import ArgumentParser
+import torch
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 from torch.utils.data import DataLoader
 
 from snn.librispeech.model import TwinNet
 from snn.librispeech.data_loader import PairDatasetFromList
+
 
 def test():
     parser = ArgumentParser()
@@ -39,7 +41,7 @@ def test():
             PairDatasetFromList(args.test_list, args.test_path,
                                 max_sample_length=args.max_sample_length),
             batch_size=args.batch_size, shuffle=False,
-            num_workers=args.num_workers, pin_memory=True
+            num_workers=args.num_workers, pin_memory=torch.cuda.is_available()
         )
 
     trainer.test(model=model, ckpt_path=args.model_path, test_dataloaders=test_dataloader)

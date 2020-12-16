@@ -35,7 +35,8 @@ class TwinNet(pl.LightningModule):
                  num_train: int = 0, num_speakers: int = 0,
                  num_workers: int = 1, data_path: str = './data/', rng_seed: int = 0,
                  n_mels: int = 40, aggregation_type: str = 'SAP',
-                 augment: bool = False, plot_roc: bool = False,
+                 specaugment: bool = False, augment: bool = False,
+                 plot_roc: bool = False,
                  **kwargs):
         super().__init__()
         # Training/testing params
@@ -45,11 +46,12 @@ class TwinNet(pl.LightningModule):
         self.max_sample_length: Final = None if max_sample_length == 0 else max_sample_length
         self.rng_seed: Final = rng_seed
         self.augment: Final = augment
+        self.specaugment: Final = specaugment
         self.num_train: Final = num_train
         self.num_speakers: Final = None if num_speakers == 0 else num_speakers
 
         self.save_hyperparameters('learning_rate', 'batch_size', 'max_epochs', 'rng_seed', 'max_sample_length',
-                                  'num_speakers', 'num_train', 'augment', 'n_mels', 'aggregation_type')
+                                  'num_speakers', 'num_train', 'specaugment', 'augment', 'n_mels', 'aggregation_type')
 
         self._plot_roc: Final = plot_roc
         self._data_path: Final = data_path
@@ -74,8 +76,9 @@ class TwinNet(pl.LightningModule):
 
         self.loss_fn = AngularPrototypicalLoss()
 
+        # Partial SpecAugment, if toggled.
         self.augment_spectrogram: Optional[nn.Module] = None
-        if self.augment:
+        if self.specaugment:
             F = 0.20
             T = 0.10
             self.augment_spectrogram = torch.nn.Sequential(
@@ -133,8 +136,10 @@ class TwinNet(pl.LightningModule):
         training.add_argument('--num_train', type=int, default=0,
                               help='# of samples to take from training data each epoch, 0 to use all.'
                               'Use with --augment if value is greater than the amount of training data pairs.')
-        training.add_argument('--augment', action='store_true', default=False,
+        training.add_argument('--specaugment', action='store_true', default=False,
                               help='Augment training data using SpecAugment without time warping.')
+        training.add_argument('--augment', action='store_true', default=False,
+                              help='Augment training data by adding noise (gaussian or RIR).')
         training.add_argument('--max_sample_length', type=int, default=2,
                               help='Maximum length in seconds of samples used, clipped/padded to fit. 0 for no limit.')
 
@@ -199,7 +204,7 @@ class TwinNet(pl.LightningModule):
         for shots in support_sets:
             s = []
             for waveform in shots:
-                x = self.spectogram_transform(waveform, augment=self.augment)
+                x = self.spectogram_transform(waveform, augment=self.specaugment)
                 s.append(self.cnn(x))
             supports.append(torch.stack(s, dim=1))
 
@@ -225,8 +230,8 @@ class TwinNet(pl.LightningModule):
     #     else:
     #         x1, x2, y = cast(Tuple[torch.Tensor, torch.Tensor, torch.Tensor], batch)
 
-    #     x1 = self.spectogram_transform(x1, augment=self.augment)
-    #     x2 = self.spectogram_transform(x2, augment=self.augment)
+    #     x1 = self.spectogram_transform(x1, augment=self.specaugment)
+    #     x2 = self.spectogram_transform(x2, augment=self.specaugment)
     #     out = self(x1, x2)
 
     #     # dist = F.pairwise_distance(x1, x2, keepdim=True)
@@ -365,9 +370,10 @@ class TwinNet(pl.LightningModule):
             train_dataset = dset.LIBRISPEECH(self._data_path, url='train-clean-100', download=False)
             val_dataset = dset.LIBRISPEECH(self._data_path, url='dev-clean', download=False)
 
-            self.training_set = NShotKWayDataset(train_dataset, num_shots=1, num_ways=5,
-                                                 max_sample_length=self.max_sample_length)
-            # self.training_set = PairDataset(train_dataset, n_speakers=self.num_speakers,
+            self.training_set = NShotKWayDatasetNoQ(train_dataset, num_shots=2, num_ways=self.batch_size,
+                                                    augment=self.augment,
+                                                    max_sample_length=self.max_sample_length)
+            # self.training_set = PairDataset(train_dataset, n_speakers=self.num_speakers, augment=self.augment,
             #                                 max_sample_length=self.max_sample_length)
             # if self.num_train != 0:
             #     self.training_sampler = torch.utils.data.RandomSampler(self.training_set, replacement=True,

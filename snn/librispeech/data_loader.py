@@ -276,9 +276,9 @@ class NShotKWayDataset(Dataset):
         self._augment: Final = augment
         self._max_length: Final = max_sample_length
         self._transform: Final = Compose([
-            AddGaussianSNR(min_SNR=0.5, max_SNR=0.5, p=1.0),
-            #AddImpulseResponse(os.path.join(rir_path, 'real_rirs_isotropic_noises'), p=0.5),
-            #AddShortNoises(os.path.join(rir_path, 'pointsource_noises'), p=0.5)
+            AddGaussianSNR(min_SNR=0.2, max_SNR=0.5, p=0.5),
+            AddImpulseResponse(os.path.join(rir_path, 'real_rirs_isotropic_noises'), p=0.5),
+            AddShortNoises(os.path.join(rir_path, 'pointsource_noises'), p=0.5)
         ])
 
         speaker_set = set([])
@@ -404,9 +404,9 @@ class NShotKWayDatasetNoQ(Dataset):
         self._augment: Final = augment
         self._max_length: Final = max_sample_length
         self._transform: Final = Compose([
-            AddGaussianSNR(min_SNR=0.5, max_SNR=0.5, p=1.0),
-            #AddImpulseResponse(os.path.join(rir_path, 'real_rirs_isotropic_noises'), p=0.5),
-            #AddShortNoises(os.path.join(rir_path, 'pointsource_noises'), p=0.5)
+            AddGaussianSNR(min_SNR=0.2, max_SNR=0.5, p=0.5),
+            AddImpulseResponse(os.path.join(rir_path, 'real_rirs_isotropic_noises'), p=0.5),
+            AddShortNoises(os.path.join(rir_path, 'pointsource_noises'), p=0.5)
         ])
 
         speaker_set = set([])
