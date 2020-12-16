@@ -10,7 +10,8 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from pytorch_lightning.metrics.functional.classification import roc, auroc
+from pytorch_lightning.metrics.functional import roc
+from pytorch_lightning.metrics.functional.classification import auroc
 from torch.utils.data import DataLoader, Sampler
 from torch.utils.data.dataset import Dataset
 import matplotlib.pyplot as plt
