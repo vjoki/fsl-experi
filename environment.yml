@@ -11,6 +11,7 @@ dependencies:
   - jupyterlab=2.2
   - pip=20.2.3
   - mypy=0.790
+  - typing-extensions=3.7.4*
   - pylint=2.6
   - pip:
     - -r file:requirements.txt

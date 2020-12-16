@@ -89,8 +89,8 @@ class TwinNet(pl.LightningModule):
             )
 
         # waveform -> MelSpectrogram (n_fft=512, n_mels) -> C
-        self.cnn: nn.Module = FastResNet(nOut=512, encoder_type=aggregation_type)
-        # self.cnn: nn.Module = ThinResNet(nOut=512, encoder_type=aggregation_type, n_mels=n_mels)
+        #self.cnn: nn.Module = FastResNet(nOut=512, encoder_type=aggregation_type)
+        self.cnn: nn.Module = ThinResNet(nOut=512, encoder_type=aggregation_type, n_mels=n_mels)
 
         if aggregation_type == 'SAP':
             cnn_out_dim = 512
@@ -100,9 +100,9 @@ class TwinNet(pl.LightningModule):
             cnn_out_dim = 512
 
         # 2xC -> 4x128
-        self.caps: nn.Module = CapsNetWithoutPrimaryCaps(routing_iterations=3,
-                                                         input_caps=2, input_dim=cnn_out_dim,
-                                                         output_caps=4, output_dim=128)
+        # self.caps: nn.Module = CapsNetWithoutPrimaryCaps(routing_iterations=3,
+        #                                                  input_caps=2, input_dim=cnn_out_dim,
+        #                                                  output_caps=4, output_dim=128)
 
         # C -> 1, or if CapsNet (4*128) -> 1
         self.out: nn.Module = nn.Linear(cnn_out_dim, 1)
@@ -151,6 +151,7 @@ class TwinNet(pl.LightningModule):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
         return self.cnn(x)
+
     # def forward(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
     #     # print(x1.shape)
     #     x1 = self.cnn(x1)
@@ -208,7 +209,7 @@ class TwinNet(pl.LightningModule):
         support = torch.stack(supports, dim=0)
 
         loss, cos_sim_matrix, label = self.loss_fn(support)
-        acc = accuracy(cos_sim_matrix, label, topk=(1,))[0]
+        acc = accuracy(cos_sim_matrix.detach(), label.detach(), topk=(1,))[0]
 
         # acc = self.train_accuracy(out, y)
         self.log('train_acc_step', acc, on_step=True, on_epoch=False)
@@ -277,14 +278,12 @@ class TwinNet(pl.LightningModule):
         # self.log('val_acc', acc, on_step=True, on_epoch=True)
 
         ## dist = F.pairwise_distance(x1, x2, keepdim=True)
-        loss = torch.mean((1.0 - y) * torch.pow(out, 2) + y * torch.pow(torch.clamp(1.0 - out, min=0.0), 2))
+        #loss = torch.mean((1.0 - y) * torch.pow(out, 2) + y * torch.pow(torch.clamp(1.0 - out, min=0.0), 2))
         #loss = self.loss(out, y)
+        loss = F.binary_cross_entropy_with_logits(out, y)
 
-        self.val_accuracy(out, 1 - y)
+        self.val_accuracy(out, y)
         self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
-
-        # eer, _, _, _, _ = compute_evaluation_metrics([[out, y]])
-        # self.log('val_eer', eer, on_step=False, on_epoch=True, prog_bar=True)
 
         return [out, y]
 
@@ -338,17 +337,22 @@ class TwinNet(pl.LightningModule):
         # self.log('test_acc_step', acc, on_step=True, on_epoch=False)
 
         # dist = F.pairwise_distance(x1, x2, keepdim=True)
-        # loss = torch.mean((1.0 - y) * torch.pow(dist, 2) + y * torch.pow(torch.clamp(1.0 - dist, min=0.0), 2))
-        loss = torch.mean((1.0 - y) * torch.pow(out, 2) + y * torch.pow(torch.clamp(1.0 - out, min=0.0), 2))
+        #loss = torch.mean((1.0 - y) * torch.pow(dist, 2) + y * torch.pow(torch.clamp(1.0 - dist, min=0.0), 2))
+        #loss = torch.mean((1.0 - y) * torch.pow(out, 2) + y * torch.pow(torch.clamp(1.0 - out, min=0.0), 2))
         #loss = self.loss(out, y)
+        loss = F.binary_cross_entropy_with_logits(out, y)
 
-        self.test_accuracy(out, 1 - y)
+        self.test_accuracy(out, y)
         self.log('test_loss', loss, on_step=False, on_epoch=True)
 
         return [out, y]
 
     def test_epoch_end(self, test_step_outputs: List[List[torch.Tensor]]):
         self.log('test_acc_epoch', self.test_accuracy.compute())
+
+        # Avoid ValueError: No negative samples in targets, false positive value should be meaningless
+        if self.trainer.fast_dev_run:
+            return
 
         eer, eer_thresh, auc, mdcf, mdcf_thresh = compute_evaluation_metrics(test_step_outputs, plot=self._plot_roc)
         self.log('test_eer', eer)
@@ -427,19 +431,20 @@ def train_and_test(args: argparse.Namespace):
     if early_stop:
         # Should give enough time for lr_scheduler to try do it's thing.
         callbacks.append(EarlyStopping(
-            monitor='val_eer', mode='min',
+            monitor='val_loss', mode='min',
             min_delta=early_stop_min_delta, patience=early_stop_patience,
             verbose=True, strict=True
         ))
 
     checkpoint_callback = ModelCheckpoint(
-        monitor='val_eer', mode='min',
-        filepath='./checkpoints/snn-librispeech-{epoch}-{val_eer:.2f}',
+        monitor='val_loss' if args.fast_dev_run else 'val_eer', mode='min',
+        filepath='./checkpoints/snn-librispeech-{epoch}-{val_loss:.2f}-{val_eer:.2f}',
         save_top_k=3
     )
 
     logger = TensorBoardLogger(log_dir, name='snn')
     trainer = pl.Trainer.from_argparse_args(args, logger=logger, progress_bar_refresh_rate=20,
+                                            precision=16,
                                             deterministic=True, auto_lr_find=True,
                                             checkpoint_callback=checkpoint_callback,
                                             terminate_on_nan=True,

@@ -1,6 +1,6 @@
+from typing import cast, Tuple, List
 import torch
 import matplotlib.pyplot as plt
-from typing import cast, Tuple, Optional, Union, List, Any
 from pytorch_lightning.metrics.functional import roc
 from pytorch_lightning.metrics.functional.classification import auroc
 
@@ -63,7 +63,7 @@ def compute_evaluation_metrics(outputs: List[List[torch.Tensor]],
     min_dcf, min_dcf_threshold = minDCF(fpr, fnr, thresholds)
 
     if plot:
-        assert idx.dim() == 1 and idx.size(0) == 1
+        assert idx.dim() == 0 or (idx.dim() == 1 and idx.size(0) == 1)
         i = int(idx.item())
         fpr = fpr.cpu().numpy()
         tpr = tpr.cpu().numpy()
