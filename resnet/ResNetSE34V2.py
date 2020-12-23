@@ -53,7 +53,7 @@ class ResNetSE(nn.Module):  # pylint: disable=abstract-method
             self.vlad = nn.Sequential(
                 NetVLAD(num_clusters=32, dim=num_filters[3]),
                 nn.Linear(vlad_out_dim, nOut),
-                nn.BatchNorm1d(nOut)
+                #nn.BatchNorm1d(nOut)
             )
         elif self.encoder_type == "GhostVLAD":
             vlad_out_dim = 32 * num_filters[3]
