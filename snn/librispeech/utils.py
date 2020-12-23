@@ -83,7 +83,7 @@ def compute_evaluation_metrics(outputs: List[List[torch.Tensor]],
 # torch.utils.data.DataLoader collate_fn
 def collate_var_len_tuples_fn(batch):
     a, b, labels = zip(*batch)
-    lengths = torch.as_tensor(list(map(lambda t1, t2: (t1.size(0), t2.size(0)), a, b)))
+    # lengths = torch.as_tensor(list(map(lambda t1, t2: (t1.size(0), t2.size(0)), a, b)))
     a = torch.nn.utils.rnn.pad_sequence(a, batch_first=True)
     b = torch.nn.utils.rnn.pad_sequence(b, batch_first=True)
-    return a, b, lengths, torch.utils.data.dataloader.default_collate(labels)
+    return a, b, torch.utils.data.dataloader.default_collate(labels)
