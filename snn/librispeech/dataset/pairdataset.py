@@ -66,7 +66,7 @@ class PairDatasetFromList(Dataset):
     def __init__(self,
                  list_file,
                  data_path,
-                 max_sample_length = None,
+                 max_sample_length: Optional[int] = None,
                  rir_path: str = './data/RIRS_NOISES/',
                  augment: bool = False):
         super().__init__()

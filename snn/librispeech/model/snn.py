@@ -28,7 +28,6 @@ class SNN(BaseNet):
         acc = self.train_accuracy(out, y)
         self.log('train_acc_step', acc, on_step=True, on_epoch=False)
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=False, logger=True)
-        self.log('train_label_avg', y.mean(), on_step=True, on_epoch=True)
 
         return loss
 
