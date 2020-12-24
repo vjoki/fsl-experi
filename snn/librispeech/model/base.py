@@ -130,7 +130,7 @@ class BaseNet(pl.LightningModule):
         scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=self.learning_rate,
                                                         epochs=self.max_epochs,
                                                         steps_per_epoch=len(self.train_dataloader()))
-        return [optimizer], [{'scheduler': scheduler, 'monitor': 'val_eer', 'interval': 'step'}]
+        return [optimizer], [{'scheduler': scheduler, 'monitor': 'val_loss', 'interval': 'step'}]
 
     def validation_epoch_end(self, val_step_outputs: List[List[torch.Tensor]]):
         self.log('val_acc_epoch', self.val_accuracy.compute())
