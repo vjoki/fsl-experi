@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, List, Any
 import torch
 import torch.nn.functional as F
 
@@ -34,6 +34,9 @@ class SNN(BaseNet):
         self.log('train_label_avg', y.mean(), on_step=True, on_epoch=True)
 
         return loss
+
+    def training_epoch_end(self, training_step_outputs: List[Any]):
+        self.log('train_acc_epoch', self.train_accuracy.compute())
 
     def validation_step(self,  # type: ignore[override]
                         batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
