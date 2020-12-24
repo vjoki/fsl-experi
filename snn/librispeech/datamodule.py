@@ -106,8 +106,14 @@ class LibriSpeechDataModule(pl.LightningDataModule):
         pl.seed_everything(worker_id + self.rng_seed)
 
     def train_dataloader(self) -> DataLoader:  # type: ignore[override]
+        batch_size: int
+        if self.train_set_type == 'pair':
+            batch_size = self.batch_size
+        elif self.train_set_type == 'nshotkway':
+            batch_size = 1
+
         dataloader = DataLoader(
-            self.training_set, batch_size=1,
+            self.training_set, batch_size=batch_size,
             shuffle=self.training_sampler is None,
             num_workers=self._num_workers, pin_memory=self._pin_memory,
             sampler=self.training_sampler,
