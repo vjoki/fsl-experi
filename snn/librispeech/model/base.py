@@ -1,6 +1,6 @@
 from typing import Optional, List
-from typing_extensions import Final
 import argparse
+from typing_extensions import Final
 import torch
 import torch.nn as nn
 import torchaudio
@@ -8,10 +8,10 @@ import pytorch_lightning as pl
 
 # from pytorch_metric_learning.losses import ContrastiveLoss
 # from pytorch_metric_learning.distances import LpDistance
-from snn.librispeech.utils import compute_evaluation_metrics
 from resnet.ResNetSE34V2 import MainModel as ThinResNet
 from resnet.ResNetSE34L import MainModel as FastResNet
 from resnet.utils import PreEmphasis
+from snn.librispeech.utils import compute_evaluation_metrics
 torchaudio.USE_SOUNDFILE_LEGACY_INTERFACE = False
 
 
