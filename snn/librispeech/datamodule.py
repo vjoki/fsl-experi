@@ -7,9 +7,10 @@ import pytorch_lightning as pl
 from torch.utils.data import DataLoader, Sampler
 from torch.utils.data.dataset import Dataset
 
-from snn.librispeech.data_loader import PairDataset, TripletDataset, NShotKWayDataset, NShotKWayDatasetNoQ
+from snn.librispeech.dataset import PairDataset, NShotKWayDataset
 from snn.librispeech.utils import collate_var_len_tuples_fn
 from pytorch_lightning.utilities import move_data_to_device
+
 
 class LibriSpeechDataModule(pl.LightningDataModule):
     def __init__(self,
@@ -87,9 +88,10 @@ class LibriSpeechDataModule(pl.LightningDataModule):
                 self.training_set = PairDataset(train_dataset, n_speakers=self.num_speakers, augment=self.augment,
                                                 max_sample_length=self.max_sample_length)
             elif self.train_set_type == 'nshotkway':
-                self.training_set = NShotKWayDatasetNoQ(train_dataset, num_shots=2, num_ways=self.batch_size,
-                                                        augment=self.augment,
-                                                        max_sample_length=self.max_sample_length)
+                self.training_set = NShotKWayDataset(train_dataset,
+                                                     num_shots=2, num_ways=self.batch_size,
+                                                     augment=self.augment,
+                                                     max_sample_length=self.max_sample_length)
 
             if self.num_train != 0:
                 self.training_sampler = torch.utils.data.RandomSampler(self.training_set, replacement=True,

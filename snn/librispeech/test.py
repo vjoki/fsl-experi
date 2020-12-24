@@ -5,7 +5,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from torch.utils.data import DataLoader
 
 from snn.librispeech.model import TwinNet
-from snn.librispeech.data_loader import PairDatasetFromList
+from snn.librispeech.dataset import PairDatasetFromList
 
 
 def test():
