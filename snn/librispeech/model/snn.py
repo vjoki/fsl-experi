@@ -2,13 +2,10 @@ from typing import Tuple, List, Any
 import torch
 import torch.nn.functional as F
 
-from snn.librispeech.model.base import BaseNet
+from .base import BaseNet
 
 
 class SNN(BaseNet):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
     def forward(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
         x1 = self.cnn(x1)
         x2 = self.cnn(x2)

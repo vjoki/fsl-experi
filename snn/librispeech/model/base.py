@@ -107,7 +107,7 @@ class BaseNet(pl.LightningModule):
         model.add_argument('--n_mels', type=int, default=40, help='# of mels to use in the MelSpectrograms.')
         model.add_argument('--n_fft', type=int, default=512, help='size of FFT used in the MelSpectrograms.')
 
-        model.add_argument('--resnet_type', type=str, default='thin',
+        model.add_argument('--resnet_type', type=str.lower, default='thin',
                            help='Which ResNet to use: thin, fast.')
         model.add_argument('--resnet_n_out', type=int, default=512)
         model.add_argument('--resnet_aggregation_type', type=str, default='SAP',

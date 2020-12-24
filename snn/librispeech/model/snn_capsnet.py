@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from snn.librispeech.model.base import BaseNet
+from .base import BaseNet
 from capsnet.CapsNet import CapsNetWithoutPrimaryCaps
 
 

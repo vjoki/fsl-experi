@@ -1,13 +1,9 @@
 import argparse
 from typing import List
-from argparse import ArgumentParser
 import pytorch_lightning as pl
 
 # from snn.librispeech.model import TwinNet, train_and_test
-from snn.librispeech.model.SNN import SNN
-from snn.librispeech.model.SNNCapsNet import SNNCapsNet
-from snn.librispeech.model.SNNAngularProto import SNNAngularProto
-from snn.librispeech.model.base import BaseNet
+from snn.librispeech.model import BaseNet, SNN, SNNCapsNet, SNNAngularProto
 from snn.librispeech.datamodule import LibriSpeechDataModule
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
@@ -73,9 +69,9 @@ def train_and_test(args: argparse.Namespace):
 
 
 def train():
-    parser = ArgumentParser()
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     general = parser.add_argument_group('General')
-    general.add_argument('--model', type=str.lower, default='SNN',
+    general.add_argument('--model', type=str.lower, default='snn',
                          choices=['snn', 'snn-capsnet', 'snn-angularproto'],
                          help='Choose the model to train.')
 

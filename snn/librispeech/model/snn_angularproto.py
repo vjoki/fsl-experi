@@ -2,7 +2,7 @@ from typing import Tuple, List
 import torch
 import torch.nn.functional as F
 
-from snn.librispeech.model.base import BaseNet
+from .base import BaseNet
 from snn.librispeech.loss.angularproto import AngularPrototypicalLoss
 from resnet.utils import accuracy
 
