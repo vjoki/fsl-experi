@@ -1,3 +1,4 @@
+import platform
 from typing import Optional, List
 import argparse
 from typing_extensions import Final
@@ -12,7 +13,12 @@ from resnet.ResNetSE34V2 import MainModel as ThinResNet
 from resnet.ResNetSE34L import MainModel as FastResNet
 from resnet.utils import PreEmphasis
 from snn.librispeech.utils import compute_evaluation_metrics
-torchaudio.USE_SOUNDFILE_LEGACY_INTERFACE = False
+
+if platform.system().lower().startswith('win'):
+    torchaudio.set_audio_backend("soundfile")
+    torchaudio.USE_SOUNDFILE_LEGACY_INTERFACE = False
+else:
+    torchaudio.set_audio_backend("sox_io")
 
 
 class BaseNet(pl.LightningModule):
