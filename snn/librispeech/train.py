@@ -37,7 +37,7 @@ def train_and_test(args: argparse.Namespace):
         save_top_k=3
     )
 
-    logger = TensorBoardLogger(log_dir, name=args.model)
+    logger = TensorBoardLogger(log_dir, name=args.model, log_graph=True, default_hp_metric=False)
     trainer = pl.Trainer.from_argparse_args(args, logger=logger, progress_bar_refresh_rate=20,
                                             precision=16,
                                             deterministic=True, auto_lr_find=True,

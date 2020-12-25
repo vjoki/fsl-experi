@@ -54,6 +54,8 @@ class BaseNet(pl.LightningModule):
 
         self._plot_roc: Final = plot_roc
 
+        self._example_input_array = torch.rand(4, 1, 40, 201)
+
         self.instancenorm: Final[nn.Module] = nn.InstanceNorm1d(n_mels)
         self.spectrogram: Final[nn.Module] = torch.nn.Sequential(
             PreEmphasis(),
