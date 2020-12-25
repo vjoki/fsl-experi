@@ -43,33 +43,24 @@ class ResNetSE(nn.Module):  # pylint: disable=abstract-method
                 nn.Softmax(dim=2),
             )
 
+        out_dim: int
         if self.encoder_type == "SAP":
             out_dim = num_filters[3] * outmap_size
         elif self.encoder_type == "ASP":
             out_dim = num_filters[3] * outmap_size * 2
         elif self.encoder_type == "NetVLAD":
-            vlad_out_dim = 32 * num_filters[3]
-            print("ResNet -> VLAD -> FC dimensions: {} -> {} -> {}.".format(num_filters[3], vlad_out_dim, nOut))
-            self.vlad = nn.Sequential(
-                NetVLAD(num_clusters=32, dim=num_filters[3]),
-                nn.Linear(vlad_out_dim, nOut),
-                #nn.BatchNorm1d(nOut)
-            )
+            out_dim = 32 * num_filters[3]
+            print("ResNet -> VLAD dimensions: {} -> {}.".format(num_filters[3], out_dim))
+            self.vlad = NetVLAD(num_clusters=32, dim=num_filters[3])
         elif self.encoder_type == "GhostVLAD":
-            vlad_out_dim = 32 * num_filters[3]
-            print("ResNet -> VLAD -> FC dimensions: {} -> {} -> {}.".format(num_filters[3], vlad_out_dim, nOut))
-            self.vlad = nn.Sequential(
-                GhostVLAD(ghost_clusters=3, vlad_clusters=32, dim=num_filters[3]),
-                nn.Linear(vlad_out_dim, nOut),
-                nn.BatchNorm1d(nOut)
-            )
+            out_dim = 32 * num_filters[3]
+            print("ResNet -> VLAD dimensions: {} -> {}.".format(num_filters[3], out_dim))
+            self.vlad = GhostVLAD(ghost_clusters=3, vlad_clusters=32, dim=num_filters[3])
         else:
             raise ValueError('Undefined encoder')
 
-        # SAP and ASP share this.
-        if not self.encoder_type.endswith("VLAD"):
-            print("ResNet -> FC dimensions: {} -> {}.".format(out_dim, nOut))
-            self.fc = nn.Linear(out_dim, nOut)
+        print("ResNet -> FC dimensions: {} -> {}.".format(out_dim, nOut))
+        self.fc = nn.Linear(out_dim, nOut)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -123,7 +114,9 @@ class ResNetSE(nn.Module):  # pylint: disable=abstract-method
             sg = torch.sqrt((torch.sum((x**2) * w, dim=2) - mu**2).clamp(min=1e-5))
             x = torch.cat((mu, sg), 1)
         elif self.encoder_type.endswith("VLAD"):
+            # *VLAD -> FC -> L2 norm
             x = self.vlad(x)
+            x = self.fc(x)
             x = F.normalize(x, p=2, dim=1)
 
         # SAP and ASP share this.
