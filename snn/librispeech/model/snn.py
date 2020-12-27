@@ -23,7 +23,7 @@ class SNN(BaseNet):
 
         # dist = F.pairwise_distance(x1, x2, keepdim=True)
         # loss = torch.mean((1.0 - y) * torch.pow(dist, 2) + y * torch.pow(torch.clamp(1.0 - dist, min=0.0), 2))
-        loss = F.binary_cross_entropy_with_logits(out, y)
+        loss = F.binary_cross_entropy_with_logits(out + 1e-6, y)
 
         acc = self.train_accuracy(out, y)
         self.log('train_acc_step', acc, on_step=True, on_epoch=False)
@@ -42,7 +42,7 @@ class SNN(BaseNet):
         x1 = self.spectogram_transform(x1)
         x2 = self.spectogram_transform(x2)
         out = self(x1, x2)
-        loss = F.binary_cross_entropy_with_logits(out, y)
+        loss = F.binary_cross_entropy_with_logits(out + 1e-6, y)
 
         self.val_accuracy(out, y)
         self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
@@ -57,7 +57,7 @@ class SNN(BaseNet):
         x1 = self.spectogram_transform(x1)
         x2 = self.spectogram_transform(x2)
         out = self(x1, x2)
-        loss = F.binary_cross_entropy_with_logits(out, y)
+        loss = F.binary_cross_entropy_with_logits(out + 1e-6, y)
 
         self.test_accuracy(out, y)
         self.log('test_loss', loss, on_step=False, on_epoch=True)
