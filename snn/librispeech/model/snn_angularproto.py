@@ -58,7 +58,7 @@ class SNNAngularProto(BaseNet):
         self.val_accuracy(out, y)
         self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
 
-        return [out, y]
+        return [out.detach(), y.detach()]
 
     def test_step(self,  # type: ignore[override]
                   batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
@@ -79,4 +79,4 @@ class SNNAngularProto(BaseNet):
         self.test_accuracy(out, y)
         self.log('test_loss', loss, on_step=False, on_epoch=True)
 
-        return [out, y]
+        return [out.detach(), y.detach()]
