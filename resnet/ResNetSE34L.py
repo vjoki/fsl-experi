@@ -2,8 +2,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from resnet.ResNetBlocks import SEBasicBlock
-from resnet.vlad import GhostVLAD, NetVLAD
+from .ResNetBlocks import SEBasicBlock
+from .vlad import GhostVLAD, NetVLAD
 
 
 class ResNetSE(nn.Module):  # pylint: disable=abstract-method

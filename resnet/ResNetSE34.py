@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import Parameter
-from resnet.ResNetBlocks import SEBasicBlock
+from .ResNetBlocks import SEBasicBlock
 
 
 class ResNetSE(nn.Module):

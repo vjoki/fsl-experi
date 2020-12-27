@@ -59,6 +59,7 @@ class BaseNet(pl.LightningModule):
             self._example_input_array = [torch.rand(batch_size, 1, n_mels, 201), torch.rand(batch_size, 1, n_mels, 201)]
 
         self.instancenorm: Final[nn.Module] = nn.InstanceNorm1d(n_mels)
+        # 1xTIME*SAMPLERATE -> 1xN_MELSxTIME?
         self.spectrogram: Final[nn.Module] = torch.nn.Sequential(
             PreEmphasis(),
             torchaudio.transforms.MelSpectrogram(sample_rate=16000, n_fft=n_fft, win_length=400, hop_length=160,
@@ -77,7 +78,7 @@ class BaseNet(pl.LightningModule):
                 torchaudio.transforms.TimeMasking(time_mask_param=int(T * (n_fft // 2 + 1)))
             )
 
-        # waveform -> MelSpectrogram (n_fft=512, n_mels) -> C
+        # Bx1xN_MELSxTIME -> BxC
         self.cnn: nn.Module
         if resnet_type == 'thin':
             self.cnn = ThinResNet(nOut=resnet_n_out, encoder_type=resnet_aggregation_type, n_mels=n_mels)
@@ -93,6 +94,7 @@ class BaseNet(pl.LightningModule):
         elif resnet_aggregation_type.endswith('VLAD'):
             cnn_out_dim = 512
 
+        # BxC -> Bx1
         self.out: nn.Module = nn.Linear(cnn_out_dim, 1)
 
         self.train_accuracy = pl.metrics.Accuracy()
