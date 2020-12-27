@@ -41,7 +41,6 @@ class BaseNet(pl.LightningModule):
                  **kwargs):
         super().__init__()
         # Training/testing params
-        self.learning_rate = learning_rate
         self.max_epochs: Final = max_epochs  # Needed for OneCycleLR
         self.augment: Final = augment
         self.specaugment: Final = specaugment
@@ -137,8 +136,8 @@ class BaseNet(pl.LightningModule):
         return x
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate)
-        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=self.learning_rate,
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.learning_rate)
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=self.hparams.learning_rate,
                                                         epochs=self.max_epochs,
                                                         steps_per_epoch=len(self.train_dataloader()))
         return [optimizer], [{'scheduler': scheduler, 'monitor': 'val_loss', 'interval': 'step'}]
