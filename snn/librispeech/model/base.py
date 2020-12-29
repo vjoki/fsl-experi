@@ -28,6 +28,7 @@ class BaseNet(pl.LightningModule):
                  learning_rate: float = 1e-3, max_epochs: int = 100,
                  augment: bool = False,
                  specaugment: bool = False,
+                 signal_transform: str = 'melspectrogram',
                  n_fft: int = 512,
                  n_mels: int = 40,
                  resnet_aggregation_type: str = 'SAP',
@@ -48,7 +49,7 @@ class BaseNet(pl.LightningModule):
         self.save_hyperparameters('model', 'learning_rate', 'max_epochs',
                                   'batch_size', 'rng_seed', 'max_sample_length',
                                   'num_speakers', 'num_train', 'augment',
-                                  'specaugment', 'n_mels',
+                                  'specaugment', 'signal_transform', 'n_fft', 'n_mels',
                                   'resnet_aggregation_type', 'resnet_type', 'resnet_n_out')
 
         self._plot_roc: Final = plot_roc
@@ -60,15 +61,30 @@ class BaseNet(pl.LightningModule):
 
         self.instancenorm: Final[nn.Module] = nn.InstanceNorm1d(n_mels)
         # 1xTIME*SAMPLERATE -> 1xN_MELSxTIME?
-        self.spectrogram: Final[nn.Module] = torch.nn.Sequential(
-            PreEmphasis(),
-            torchaudio.transforms.MelSpectrogram(sample_rate=16000, n_fft=n_fft, win_length=400, hop_length=160,
-                                                 window_fn=torch.hamming_window, n_mels=n_mels)
-        )
+
+        transform_fn: nn.Module
+        if signal_transform == 'melspectrogram':
+            transform_fn = torch.nn.Sequential(
+                PreEmphasis(),
+                torchaudio.transforms.MelSpectrogram(sample_rate=16000, n_fft=n_fft, win_length=400, hop_length=160,
+                                                     window_fn=torch.hamming_window, n_mels=n_mels)
+            )
+        elif signal_transform == 'spectrogram':
+            transform_fn = torch.nn.Sequential(
+                PreEmphasis(),
+                torchaudio.transforms.Spectrogram(n_fft=n_fft, win_length=400, hop_length=160,
+                                                  window_fn=torch.hamming_window)
+            )
+        elif signal_transform == 'mfcc':
+            transform_fn = torch.nn.Sequential(
+                PreEmphasis(),
+                torchaudio.transforms.MFCC(sample_rate=16000, n_mfcc=n_mels, log_mels=True)
+            )
+        self.signal_transform_fn: Final[nn.Module] = transform_fn
 
         # Partial SpecAugment, if toggled.
         self.augment_spectrogram: Optional[nn.Module] = None
-        if self.specaugment:
+        if self.specaugment and signal_transform != 'mfcc':
             F = 0.20
             T = 0.10
             self.augment_spectrogram = torch.nn.Sequential(
@@ -116,6 +132,9 @@ class BaseNet(pl.LightningModule):
                               help='Augment training data using SpecAugment without time warping.')
 
         model = parser.add_argument_group('Model')
+        model.add_argument('--signal_transform', type=str, default='melspectrogram',
+                           choices=['melspectrogram', 'spectrogram', 'mfcc'],
+                           help='Waveform signal transform function to use.')
         model.add_argument('--n_mels', type=int, default=40, help='# of mels to use in the MelSpectrograms.')
         model.add_argument('--n_fft', type=int, default=512, help='size of FFT used in the MelSpectrograms.')
 
