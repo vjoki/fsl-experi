@@ -22,6 +22,8 @@ else:
 
 
 class BaseNet(pl.LightningModule):
+    SAMPLE_RATE: Final[int] = 16000
+
     # NOTE: Defaults here shouldn't really matter much, they're just here to make initializing the model
     # for other purposes easier (such as log_graph)...
     def __init__(self, model: str,
@@ -75,7 +77,8 @@ class BaseNet(pl.LightningModule):
         if signal_transform == 'melspectrogram':
             transform_fn = torch.nn.Sequential(
                 PreEmphasis(),
-                torchaudio.transforms.MelSpectrogram(sample_rate=16000, n_fft=n_fft, win_length=400, hop_length=160,
+                torchaudio.transforms.MelSpectrogram(sample_rate=self.SAMPLE_RATE, n_fft=n_fft,
+                                                     win_length=400, hop_length=160,
                                                      window_fn=torch.hamming_window, n_mels=n_mels)
             )
         elif signal_transform == 'spectrogram':
@@ -87,7 +90,7 @@ class BaseNet(pl.LightningModule):
         elif signal_transform == 'mfcc':
             transform_fn = torch.nn.Sequential(
                 PreEmphasis(),
-                torchaudio.transforms.MFCC(sample_rate=16000, n_mfcc=n_mels, log_mels=True)
+                torchaudio.transforms.MFCC(sample_rate=self.SAMPLE_RATE, n_mfcc=n_mels, log_mels=True)
             )
         self.signal_transform_fn: Final[nn.Module] = transform_fn
 
@@ -158,11 +161,12 @@ class BaseNet(pl.LightningModule):
 
     def spectogram_transform(self, x: torch.Tensor, augment: bool = False) -> torch.Tensor:
         with torch.no_grad():
-            x = self.spectrogram(x)+1e-6
-            x = x.log()
-            if augment and self.augment_spectrogram:
-                x = self.augment_spectrogram(x)
-            x = self.instancenorm(x).unsqueeze(1)
+            with torch.cuda.amp.autocast(enabled=False):
+                x = self.signal_transform_fn(x)+1e-6
+                x = x.log()
+                if augment and self.augment_spectrogram:
+                    x = self.augment_spectrogram(x)
+                x = self.instancenorm(x).unsqueeze(1)
         return x
 
     def configure_optimizers(self):
