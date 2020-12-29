@@ -16,22 +16,48 @@ class SNNAngularProto(BaseNet):
         return self.cnn(x)
 
     def training_step(self,  # type: ignore[override]
-                      batch: Tuple[List[List[torch.Tensor]], torch.Tensor],
+                      batch: Tuple[torch.Tensor, torch.Tensor],
                       batch_idx: int) -> torch.Tensor:
-        support_sets, _ = batch
+        support_sets, labels = batch
+        #print('support_sets', support_sets.shape)
+        #print('labels', labels.shape)
 
-        supports = []
-        for shots in support_sets:
-            s = []
-            for waveform in shots:
-                x = self.spectogram_transform(waveform, augment=self.specaugment)
-                s.append(self.cnn(x))
-            supports.append(torch.cat(s, dim=0))
+        # BxWxSxWAVE -> BxSxWxWAVE
+        #support_sets = support_sets.transpose(2,1)
 
-        support = torch.stack(supports, dim=0)
+        # Group ways with batch, so that support_sets gets pushed through the CNN in one go without extra looping.
+        # BxWxSxWAVE -> B*W*SxWAVE
+        support_sets = support_sets.reshape(-1,
+                                            support_sets.size(-1))
 
-        loss, cos_sim_matrix, label = self.training_loss_fn(support)
-        acc = accuracy(cos_sim_matrix.detach(), label.detach(), topk=(1,))[0]
+        #print('spectro in', support_sets.shape)
+        # B*W*SxWAVE -> B*W*Sx1xNMELSxSPEC
+        x = self.spectogram_transform(support_sets, augment=self.specaugment)
+        #print('ResNet (spectro)', x.shape)
+        # B*W*Sx1xNMELSxSPEC -> B*W*SxN
+        support = self.cnn(x)
+        #print('ResNet (out)', support.shape)
+
+        # Restore the original shape, by restoring the ways from batch dim.
+        # B*W*SxN -> BxWxSxN
+        support = support.reshape(self.train_batch_size,
+                                  -1,
+                                  self.num_shots,
+                                  support.size(-1))
+        assert support.size(1) == self.num_ways
+
+        # supports = []
+        # for shots in support_sets:
+        #     s = []
+        #     for waveform in shots:
+        #         x = self.spectogram_transform(waveform, augment=self.specaugment)
+        #         print('ResNet (spectro)', x.shape)
+        #         s.append(self.cnn(x))
+        #     supports.append(torch.cat(s, dim=0))
+
+        # support = torch.stack(supports, dim=0)
+
+        loss, acc = self.training_loss_fn(support)
 
         # acc = self.train_accuracy(out, y)
         self.log('train_acc_step', acc, on_step=True, on_epoch=False)

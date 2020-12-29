@@ -17,6 +17,8 @@ class LibriSpeechDataModule(pl.LightningDataModule):
                  train_set_type: str = 'pair',
                  max_sample_length: int = 0,
                  batch_size: int = 128,
+                 train_batch_size: Optional[int] = None,
+                 num_ways: int = 1, num_shots: int = 1,
                  num_train: int = 0, num_speakers: int = 0,
                  num_workers: int = 1, data_path: str = './data/', rng_seed: int = 0,
                  augment: bool = False,
@@ -24,11 +26,15 @@ class LibriSpeechDataModule(pl.LightningDataModule):
         super().__init__()
         self.train_set_type: Final = train_set_type
         self.batch_size = batch_size
+        self.train_batch_size: Final[int] = train_batch_size or batch_size
+
         self.max_sample_length: Final = None if max_sample_length == 0 else max_sample_length
         self.rng_seed: Final = rng_seed
         self.augment: Final = augment
         self.num_train: Final = num_train
         self.num_speakers: Final = None if num_speakers == 0 else num_speakers
+        self.num_ways: Final[int] = num_ways
+        self.num_shots: Final[int] = num_shots
 
         self._data_path: Final = data_path
 
@@ -62,6 +68,16 @@ class LibriSpeechDataModule(pl.LightningDataModule):
 
         training = parser.add_argument_group('Training/testing')
         training.add_argument('--batch_size', type=int, default=128)
+        training.add_argument('--max_sample_length', type=int, default=2,
+                              help='Maximum length in seconds of samples used, clipped/padded to fit. 0 for no limit.')
+
+        training = parser.add_argument_group('Training')
+        training.add_argument('--train_batch_size', type=int, default=None,
+                              help='Optionally use different batch size for training.')
+        training.add_argument('--num_ways', type=int, default=5,
+                              help='# of ways to train with (nshotkway only).')
+        training.add_argument('--num_shots', type=int, default=2,
+                              help='# of shots for each way (nshotkway only).')
         training.add_argument('--num_speakers', type=int, default=0,
                               help='Limits the # of speakers to train on, 0 to select all.')
         training.add_argument('--num_train', type=int, default=0,
@@ -69,8 +85,6 @@ class LibriSpeechDataModule(pl.LightningDataModule):
                               'Use with --augment if value is greater than the amount of training data pairs.')
         training.add_argument('--augment', action='store_true', default=False,
                               help='Augment training data by adding noise (gaussian or RIR).')
-        training.add_argument('--max_sample_length', type=int, default=2,
-                              help='Maximum length in seconds of samples used, clipped/padded to fit. 0 for no limit.')
 
         return parser
 
@@ -89,7 +103,7 @@ class LibriSpeechDataModule(pl.LightningDataModule):
                                                 max_sample_length=self.max_sample_length)
             elif self.train_set_type == 'nshotkway':
                 self.training_set = NShotKWayDataset(train_dataset,
-                                                     num_shots=2, num_ways=self.batch_size,
+                                                     num_shots=self.num_shots, num_ways=self.num_ways,
                                                      augment=self.augment,
                                                      max_sample_length=self.max_sample_length)
 
@@ -106,14 +120,8 @@ class LibriSpeechDataModule(pl.LightningDataModule):
         pl.seed_everything(worker_id + self.rng_seed)
 
     def train_dataloader(self) -> DataLoader:  # type: ignore[override]
-        batch_size: int
-        if self.train_set_type == 'pair':
-            batch_size = self.batch_size
-        elif self.train_set_type == 'nshotkway':
-            batch_size = 1
-
         dataloader = DataLoader(
-            self.training_set, batch_size=batch_size,
+            self.training_set, batch_size=self.train_batch_size,
             shuffle=self.training_sampler is None,
             num_workers=self._num_workers, pin_memory=self._pin_memory,
             sampler=self.training_sampler,

@@ -37,6 +37,8 @@ class BaseNet(pl.LightningModule):
                  # DataModule args passed in for save_hyperparameters
                  max_sample_length: int = 0,
                  batch_size: int = 128,
+                 train_batch_size: Optional[int] = None,
+                 num_ways: int = 1, num_shots: int = 1,
                  num_train: int = 0, num_speakers: int = 0,
                  num_workers: int = 1, data_path: str = './data/', rng_seed: int = 0,
                  **kwargs):
@@ -45,9 +47,16 @@ class BaseNet(pl.LightningModule):
         self.max_epochs: Final = max_epochs  # Needed for OneCycleLR
         self.augment: Final = augment
         self.specaugment: Final = specaugment
+        self.batch_size: Final[int] = batch_size
+        self.train_batch_size: Final[int] = train_batch_size or batch_size
+
+        self.num_ways: Final[int] = num_ways
+        self.num_shots: Final[int] = num_shots
 
         self.save_hyperparameters('model', 'learning_rate', 'max_epochs',
-                                  'batch_size', 'rng_seed', 'max_sample_length',
+                                  'batch_size', 'train_batch_size', 'rng_seed',
+                                  'max_sample_length',
+                                  'num_ways', 'num_shots',
                                   'num_speakers', 'num_train', 'augment',
                                   'specaugment', 'signal_transform', 'n_fft', 'n_mels',
                                   'resnet_aggregation_type', 'resnet_type', 'resnet_n_out')

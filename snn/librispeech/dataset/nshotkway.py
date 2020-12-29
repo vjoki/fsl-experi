@@ -1,10 +1,8 @@
 import os
 import collections
-from typing import Optional, List, Dict, Tuple, Set
+from typing import Optional, List, Dict
 from typing_extensions import Final
 import torch
-import torchaudio
-import torch.nn.functional as F
 import torchaudio.datasets as dset
 from torch.utils.data.dataset import Dataset
 from audiomentations import Compose, AddGaussianSNR, AddGaussianNoise, AddImpulseResponse, AddShortNoises
@@ -13,6 +11,8 @@ from .util import process_waveform
 
 
 class NShotKWayDataset(Dataset):
+    SAMPLE_RATE: Final[int] = 16000
+
     def __init__(self, dataset: dset.LIBRISPEECH,
                  num_shots: int = 1,
                  num_ways: int = 5,
@@ -93,30 +93,29 @@ class NShotKWayDataset(Dataset):
 
     def __getitem__(self, index):
         support_indices = self.entries[index]
+        max_frames = self._max_length * self.SAMPLE_RATE if self._max_length else None
 
-        support_set = []
-        labels = []
+        support_set = torch.empty(size=(self.n_ways, self.n_shots, max_frames))
+        labels = torch.empty(size=(self.n_ways, self.n_shots, 1), dtype=torch.long)
+        assert support_set.device.type == labels.device.type == "cpu"
 
         assert len(support_indices) == self.n_ways
-        for way in support_indices:
-            shots = []
-            shot_labels = []
+        for i, way in enumerate(support_indices):
             assert len(way) == self.n_shots
-            for shot in way:
+            for j, shot in enumerate(way):
                 (wf, sample_rate, _, speaker, _, _) = self.dataset.__getitem__(shot)
-                max_frames = self._max_length * sample_rate if self._max_length else None
+                assert wf.device.type == "cpu"
+                assert sample_rate == self.SAMPLE_RATE
 
                 if self._augment:
                     assert wf.size(0) == 1
                     wf = wf.squeeze()
-                    wf = torch.from_numpy(self._transform(wf.t().numpy(), sample_rate=sample_rate))
+                    wf = torch.from_numpy(self._transform(wf.t().numpy(), sample_rate=sample_rate), device=wf.device)
                     if torch.isnan(wf).any() or torch.isinf(wf).any():
                         print('invalid input detected at augment', wf)
 
                 wf = process_waveform(wf, max_frames_per_sample=max_frames)
-                shots.append(wf)
-                shot_labels.append(torch.LongTensor(speaker))
-            support_set.append(shots)
-            labels.append(shot_labels)
+                labels[i, j] = torch.LongTensor([speaker])
+                support_set[i, j] = wf
 
         return (support_set, labels)

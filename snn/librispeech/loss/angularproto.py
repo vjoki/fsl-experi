@@ -2,54 +2,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-
-# class AngularPrototypicalLoss(nn.Module):
-#     def __init__(self, init_scale=10.0, init_bias=-5.0):
-#         super().__init__()
-#         self.w = nn.Parameter(torch.as_tensor(init_scale))
-#         self.b = nn.Parameter(torch.as_tensor(init_bias))
-#         self.criterion = torch.nn.CrossEntropyLoss()
-
-#     def forward(self, query, support, label=None):
-#         # B = batch, W = way = speaker, S = shot, N = features
-#         # query shape is BxN.
-#         # support shape is BxWxSxN, where WxS signifies the mini-batch.
-#         assert support.size(1) >= 2
-#         #print(support.shape)
-#         #print(label.shape)
-
-#         # Average support set shots.
-#         # out_anchor = prototype = centroid
-#         centroid = torch.mean(support, 2)  # BxWxN
-#         #print(centroid.shape, query.shape)
-
-#         # Cosine similarity needs both inputs to be the same shape.
-#         query = query.unsqueeze(-2).repeat(1, centroid.size(1), 1)  # BxWxN
-
-#         # Feature dimension (N) wise cosine similiarity.
-#         cos_sim_matrix = F.cosine_similarity(query, centroid, dim=2)  # BxW
-
-#         # TODO: Why is w clamped?
-#         torch.clamp(self.w, 1e-6)
-#         cos_sim_matrix = self.w * cos_sim_matrix + self.b  # BxW
-
-#         # print(cos_sim_matrix.shape, label.shape)
-#         # losses = []
-#         # for i in range(0, label.size(1)):
-#         #     losses.append(self.criterion(cos_sim_matrix, label[:, i]))
-#         # nloss = torch.mean(torch.stack(losses))
-
-#         # We assume that the first support set is the query speaker, thus target class is always 0.
-#         #label = torch.zeros(centroid.size(0), dtype=torch.long, device=query.device)
-#         if label is None:
-#             label = torch.arange(0, centroid.size(0), dtype=torch.long, device=query.device)
-#             #label = torch.zeros(centroid.size(0), dtype=torch.long, device=query.device)
-#         #label[0] = 1
-#         nloss = self.criterion(cos_sim_matrix, label)
-#         #print(nloss, nloss.shape, cos_sim_matrix.shape, label.shape)
-
-#         return nloss, cos_sim_matrix, label
+from resnet.utils import accuracy
 
 
 class AngularPrototypicalLoss(nn.Module):
@@ -61,39 +14,60 @@ class AngularPrototypicalLoss(nn.Module):
 
     def forward(self, support, label=None):
         # B = batch = way = speakers, S = shots, N = features
-        # support shape is BxSxN.
-        assert support.size(0) >= 2
-        #print(support.shape)
-        #print(label.shape)
+        # support shape is BxWxSxN.
+        n_ways = support.size(1)
+        n_shots = support.size(2)
 
-        # Average support set shots.
+        # Our cosine similarity compares the first shots of each way to the average of the rest of the shots.
+        # Thus n_shots must be >=2.
+        assert n_shots >= 2
+
+        # First shots of each way.
+        query = support[:, :, 0, :]  # BxWxN
+
+        # Average of the rest of the shots of each way.
         # out_anchor = prototype = centroid
-        centroid = torch.mean(support[1:, :, :], 1)  # BxN
-        #print(centroid.shape, query.shape)
-
-        # Cosine similarity needs both inputs to be the same shape.
-        query = support[0, :, :].unsqueeze(-2)  # BxN
+        centroid = torch.mean(support[:, :, 1:, :], 2)  # BxWxN
 
         # Feature dimension (N) wise cosine similiarity.
-        cos_sim_matrix = F.cosine_similarity(query, centroid, dim=0)  # B
+        # Ex. for
+        # support = tensor([[[[ 1.2535,  0.5587],
+        #                     [ 1.2535,  0.5587]],
+        #                    [[-0.5054,  1.0834],
+        #                      [-0.5054,  1.0834]],
+        #                    [[ 1.3112,  0.8206],
+        #                      [ 1.3112,  0.8206]]]])
+        #
+        # query = tensor([[[ 1.2535,  0.5587],
+        #                  [-0.5054,  1.0834],
+        #                  [ 1.3112,  0.8206]]])
+        # centroid = tensor([[[ 1.2535,  0.5587],
+        #                     [-0.5054,  1.0834],
+        #                     [ 1.3112,  0.8206]]])
+        #
+        # cos_sim_matrix = tensor([[ 1.0000, -0.0172,  0.9902],
+        #                          [-0.0172,  1.0000,  0.1224],
+        #                          [ 0.9902,  0.1224,  1.0000]])
+        #
+        # label = tensor([0, 1, 2])
+        # loss = tensor(0.7694)
+        #
+        cos_sim_matrix = F.cosine_similarity(
+            # BxWxN -> B*WxNx1
+            query.reshape(support.size(0) * n_ways, -1, 1),
+            # BxWxN -> B*WxNx1 -> 1xNxB*W
+            centroid.reshape(support.size(0) * n_ways, -1, 1).transpose(0, 2),
+            dim=1
+        )  # B*WxB*W
 
         # TODO: Why is w clamped?
         torch.clamp(self.w, 1e-6)
-        cos_sim_matrix = self.w * cos_sim_matrix + self.b  # B
-
-        # print(cos_sim_matrix.shape, label.shape)
-        # losses = []
-        # for i in range(0, label.size(1)):
-        #     losses.append(self.criterion(cos_sim_matrix, label[:, i]))
-        # nloss = torch.mean(torch.stack(losses))
+        cos_sim_matrix = self.w * cos_sim_matrix + self.b  # B*WxB*W
 
         # We assume that the first support set is the query speaker, thus target class is always 0.
-        #label = torch.zeros(centroid.size(0), dtype=torch.long, device=query.device)
         if label is None:
-            label = torch.arange(0, centroid.size(0), dtype=torch.long, device=query.device)
-            #label = torch.zeros(centroid.size(0), dtype=torch.long, device=query.device)
-        #label[0] = 1
+            label = torch.arange(0, n_ways, dtype=torch.long, device=support.device)
         nloss = self.criterion(cos_sim_matrix, label)
-        #print(nloss, nloss.shape, cos_sim_matrix.shape, label.shape)
+        acc = accuracy(cos_sim_matrix.detach(), label.detach(), topk=(1,))[0]
 
-        return nloss, cos_sim_matrix, label
+        return nloss, acc
