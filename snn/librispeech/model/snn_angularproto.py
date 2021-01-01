@@ -77,9 +77,16 @@ class SNNAngularProto(BaseNet):
         x2 = self.cnn(x2)
         x1 = F.normalize(x1, p=2, dim=1)
         x2 = F.normalize(x2, p=2, dim=1)
-        out = F.pairwise_distance(x1, x2, keepdim=True)
 
-        loss = F.binary_cross_entropy_with_logits(out + 1e-6, y)
+        out = F.pairwise_distance(x1, x2, keepdim=True)
+        # 0 => match, so flip y.
+        y = 1 - y
+
+        # out = F.pairwise_distance(x1.unsqueeze(-1), x2.unsqueeze(-1).transpose(0, 2))
+        # out = -1 * torch.mean(out, dim=1)
+        # out = out.unsqueeze(-1)
+
+        loss = F.binary_cross_entropy_with_logits(out, y)
 
         self.val_accuracy(out, y)
         self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
@@ -98,9 +105,16 @@ class SNNAngularProto(BaseNet):
         x2 = self.cnn(x2)
         x1 = F.normalize(x1, p=2, dim=1)
         x2 = F.normalize(x2, p=2, dim=1)
-        out = F.pairwise_distance(x1, x2, keepdim=True)
 
-        loss = F.binary_cross_entropy_with_logits(out + 1e-6, y)
+        out = F.pairwise_distance(x1, x2, keepdim=True)
+        # 0 => match, so flip y.
+        y = 1 - y
+
+        # out = F.pairwise_distance(x1.unsqueeze(-1), x2.unsqueeze(-1).transpose(0, 2))
+        # out = -1 * torch.mean(out, dim=1)
+        # out = out.unsqueeze(-1)
+
+        loss = F.binary_cross_entropy_with_logits(out, y)
 
         self.test_accuracy(out, y)
         self.log('test_loss', loss, on_step=False, on_epoch=True)
