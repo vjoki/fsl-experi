@@ -1,5 +1,6 @@
 import os
 import collections
+import random
 from typing import Optional, List, Dict
 from typing_extensions import Final
 import torch
@@ -14,11 +15,11 @@ class NShotKWayDataset(Dataset):
     SAMPLE_RATE: Final[int] = 16000
 
     def __init__(self, dataset: dset.LIBRISPEECH,
+                 n_speakers: Optional[int] = None,
                  num_shots: int = 1,
                  num_ways: int = 5,
                  rir_path: str = './data/RIRS_NOISES/',
                  augment: bool = True,
-                 random: bool = False,
                  max_sample_length: Optional[int] = None):
         super().__init__()
         assert num_shots > 0
@@ -42,6 +43,9 @@ class NShotKWayDataset(Dataset):
             samples[speaker_id].append(i)
             speaker_set.add(speaker_id)
         speakers = list(speaker_set)
+
+        if n_speakers:
+            speakers = random.sample(speakers, n_speakers)
 
         self.entries = []
 
@@ -85,8 +89,9 @@ class NShotKWayDataset(Dataset):
             assert len(support_sets) == self.n_ways
             self.entries.append(support_sets)
 
-        print("Created {}-shot {}-way dataset of {} tasks from {} samples."
-              .format(self.n_shots, self.n_ways, len(self.entries), len(self.dataset)))
+        print("Created {}-shot {}-way dataset of {} tasks from {} samples using {} speakers."
+              .format(self.n_shots, self.n_ways, len(self.entries), len(self.dataset),
+                      n_speakers if n_speakers else len(speakers)))
 
     def __len__(self):
         return len(self.entries)

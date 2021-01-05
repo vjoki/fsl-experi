@@ -104,6 +104,7 @@ class LibriSpeechDataModule(pl.LightningDataModule):
             elif self.train_set_type == 'nshotkway':
                 self.training_set = NShotKWayDataset(train_dataset,
                                                      num_shots=self.num_shots, num_ways=self.num_ways,
+                                                     n_speakers=self.num_speakers,
                                                      augment=self.augment,
                                                      max_sample_length=self.max_sample_length)
 
