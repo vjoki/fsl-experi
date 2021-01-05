@@ -48,6 +48,9 @@ def compute_evaluation_metrics(outputs: List[List[torch.Tensor]],
     scores = torch.cat(list((scores for step in outputs for scores in step[0])))
     # NOTE: Need sigmoid here because we skip the sigmoid in forward() due to using BCE with logits for loss.
     #scores = torch.sigmoid(scores)
+    print('Score range: [{}, {}]'
+          .format(torch.min(scores).item(),
+                  torch.max(scores).item()))
     labels = torch.cat(list((labels for step in outputs for labels in step[1])))
     auc = auroc(scores, labels, pos_label=1)
     fpr, tpr, thresholds = roc(scores, labels, pos_label=1)
