@@ -1,6 +1,7 @@
 from typing import Tuple, List
 import torch
 import torch.nn.functional as F
+import pytorch_lightning as pl
 
 from .base import BaseNet
 from snn.librispeech.loss.angularproto import AngularPrototypicalLoss
@@ -11,6 +12,9 @@ class SNNAngularProto(BaseNet):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.training_loss_fn = AngularPrototypicalLoss()
+
+        self.val_accuracy = pl.metrics.Accuracy(compute_on_step=False, threshold=1.3)
+        self.test_accuracy = pl.metrics.Accuracy(compute_on_step=False, threshold=1.3)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
         return self.cnn(x)
@@ -59,7 +63,6 @@ class SNNAngularProto(BaseNet):
 
         loss, acc = self.training_loss_fn(support)
 
-        # acc = self.train_accuracy(out, y)
         self.log('train_acc_step', acc, on_step=True, on_epoch=False)
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=False, logger=True)
 
