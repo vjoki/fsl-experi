@@ -111,9 +111,7 @@ class NShotKWayDataset(Dataset):
                 if self._augment:
                     assert wf.size(0) == 1
                     wf = wf.squeeze()
-                    wf = torch.from_numpy(self._transform(wf.t().numpy(), sample_rate=sample_rate), device=wf.device)
-                    if torch.isnan(wf).any() or torch.isinf(wf).any():
-                        print('invalid input detected at augment', wf)
+                    wf = torch.from_numpy(self._transform(wf.t().numpy(), sample_rate=sample_rate))
 
                 wf = process_waveform(wf, max_frames_per_sample=max_frames)
                 labels[i, j] = torch.LongTensor([speaker])
