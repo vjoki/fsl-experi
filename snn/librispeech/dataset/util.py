@@ -1,8 +1,10 @@
+import os
 import random
 import collections
+import torch.nn.functional as F
 from typing import Optional, List, Dict, Tuple
 from typing_extensions import Final
-import torch.nn.functional as F
+from audiomentations import Compose, AddGaussianSNR, AddGaussianNoise, AddImpulseResponse, AddShortNoises, AddBackgroundNoise
 
 
 def pair_speaker_samples(dataset: List[str], randomize: bool,
@@ -102,3 +104,17 @@ def process_waveform(waveform, max_frames_per_sample: Optional[int] = None):
     waveform = waveform[start:start + max_frames_per_sample]
     assert waveform.size(0) == max_frames_per_sample
     return waveform
+
+
+def compose_augmentations(rir_path):
+    impulse_path = os.path.join(rir_path, 'simulated_rirs')
+    noise_path = os.path.join(rir_path, 'pointsource_noises')
+    if not (os.path.exists(impulse_path) and os.path.exists(noise_path)):
+        raise ValueError('Unable to augment signal, rir_path "{}" does not exist.'.format(rir_path))
+
+    return Compose([
+        AddGaussianSNR(min_SNR=0.2, max_SNR=0.5, p=0.5),
+        AddImpulseResponse(rir_path, leave_length_unchanged=True, p=0.3),
+        AddBackgroundNoise(noise_path, p=0.3),
+        AddShortNoises(noise_path, max_snr_in_db=80, p=0.3)
+    ])

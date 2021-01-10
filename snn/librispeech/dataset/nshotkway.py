@@ -6,9 +6,8 @@ from typing_extensions import Final
 import torch
 import torchaudio.datasets as dset
 from torch.utils.data.dataset import Dataset
-from audiomentations import Compose, AddGaussianSNR, AddGaussianNoise, AddImpulseResponse, AddShortNoises
 
-from .util import process_waveform
+from .util import process_waveform, compose_augmentations
 
 
 class NShotKWayDataset(Dataset):
@@ -30,11 +29,8 @@ class NShotKWayDataset(Dataset):
         self.dataset: Final = dataset
         self._augment: Final = augment
         self._max_length: Final = max_sample_length
-        self._transform: Final = Compose([
-            AddGaussianSNR(min_SNR=0.2, max_SNR=0.5, p=0.5),
-            AddImpulseResponse(os.path.join(rir_path, 'real_rirs_isotropic_noises'), p=0.5),
-            AddShortNoises(os.path.join(rir_path, 'pointsource_noises'), p=0.5)
-        ])
+        if augment:
+            self._transform: Final = compose_augmentations(rir_path)
 
         speaker_set = set([])
         samples: Dict[str, List[int]] = collections.defaultdict(list)

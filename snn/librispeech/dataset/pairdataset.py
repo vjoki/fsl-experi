@@ -5,9 +5,8 @@ import torch
 import torchaudio
 import torchaudio.datasets as dset
 from torch.utils.data.dataset import Dataset
-from audiomentations import Compose, AddGaussianSNR, AddGaussianNoise, AddImpulseResponse, AddShortNoises
 
-from .util import pair_speaker_samples, process_waveform
+from .util import pair_speaker_samples, process_waveform, compose_augmentations
 
 
 # FIXME: Dataset classes should be refactored to have no state/rng.
@@ -25,11 +24,8 @@ class PairDataset(Dataset):
         self.pairs: Final = pair_speaker_samples(dataset._walker, randomize=randomize, n_speakers=n_speakers)
         self._max_length: Final = max_sample_length
         self._augment: Final = augment
-        self._transform: Final = Compose([
-            AddGaussianSNR(min_SNR=0.2, max_SNR=0.5, p=0.5),
-            AddImpulseResponse(os.path.join(rir_path, 'real_rirs_isotropic_noises'), p=0.5),
-            AddShortNoises(os.path.join(rir_path, 'pointsource_noises'), p=0.5)
-        ])
+        if augment:
+            self._transform: Final = compose_augmentations(rir_path)
 
     def __len__(self):
         return len(self.pairs)
@@ -70,11 +66,8 @@ class PairDatasetFromList(Dataset):
         self.data_path = data_path
         self._max_length = max_sample_length
         self._augment: Final = augment
-        self._transform: Final = Compose([
-            AddGaussianSNR(min_SNR=0.2, max_SNR=0.5, p=0.5),
-            AddImpulseResponse(os.path.join(rir_path, 'real_rirs_isotropic_noises'), p=0.5),
-            AddShortNoises(os.path.join(rir_path, 'pointsource_noises'), p=0.5)
-        ])
+        if augment:
+            self._transform: Final = compose_augmentations(rir_path)
         with open(list_file) as f:
             self.pairs = [line.rstrip().split(" ") for line in f.readlines()]
 
