@@ -42,7 +42,7 @@ def train_and_test(args: argparse.Namespace):
                                             precision=16,
                                             deterministic=True, auto_lr_find=True,
                                             checkpoint_callback=checkpoint_callback,
-                                            terminate_on_nan=True,
+                                            terminate_on_nan=False,
                                             callbacks=callbacks)
 
     model: BaseNet
