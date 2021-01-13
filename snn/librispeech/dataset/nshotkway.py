@@ -42,6 +42,8 @@ class NShotKWayDataset(Dataset):
 
         if n_speakers:
             speakers = random.sample(speakers, n_speakers)
+        else:
+            n_speakers = len(speakers)
 
         self.entries = []
 
@@ -86,8 +88,7 @@ class NShotKWayDataset(Dataset):
             self.entries.append(support_sets)
 
         print("Created {}-shot {}-way dataset of {} tasks from {} samples using {} speakers."
-              .format(self.n_shots, self.n_ways, len(self.entries), len(self.dataset),
-                      n_speakers if n_speakers else len(speakers)))
+              .format(self.n_shots, self.n_ways, len(self.entries), len(self.dataset), n_speakers))
 
     def __len__(self):
         return len(self.entries)
