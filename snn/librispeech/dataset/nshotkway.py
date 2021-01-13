@@ -45,6 +45,7 @@ class NShotKWayDataset(Dataset):
         else:
             n_speakers = len(speakers)
 
+        self.sid_encoding: Final[Dict[str, int]] = dict(zip(speakers, range(n_speakers)))
         self.entries = []
 
         while len(speakers) >= self.n_ways:
@@ -115,7 +116,7 @@ class NShotKWayDataset(Dataset):
                     wf = torch.from_numpy(self._transform(wf.t().numpy(), sample_rate=sample_rate))
 
                 wf = process_waveform(wf, max_frames_per_sample=max_frames)
-                labels[i, j] = torch.LongTensor([speaker])
+                labels[i, j] = torch.LongTensor([self.sid_encoding[str(speaker)]])
                 support_set[i, j] = wf
 
         return (support_set, labels)
