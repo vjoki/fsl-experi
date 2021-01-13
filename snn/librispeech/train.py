@@ -2,8 +2,7 @@ import argparse
 from typing import List
 import pytorch_lightning as pl
 
-# from snn.librispeech.model import TwinNet, train_and_test
-from snn.librispeech.model import BaseNet, SNN, SNNCapsNet, SNNAngularProto
+from snn.librispeech.model import BaseNet, SNN, SNNCapsNet, SNNAngularProto, SNNSoftmaxProto
 from snn.librispeech.datamodule import LibriSpeechDataModule
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
@@ -55,6 +54,9 @@ def train_and_test(args: argparse.Namespace):
     elif args.model == 'snn-angularproto':
         model = SNNAngularProto(**dict_args)
         datamodule = LibriSpeechDataModule(train_set_type='nshotkway', **dict_args)
+    elif args.model == 'snn-softmaxproto':
+        model = SNNSoftmaxProto(**dict_args)
+        datamodule = LibriSpeechDataModule(train_set_type='nshotkway', **dict_args)
 
     # Tune learning rate.
     trainer.tune(model, datamodule=datamodule)
@@ -72,7 +74,7 @@ def train():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     general = parser.add_argument_group('General')
     general.add_argument('--model', type=str.lower, default='snn',
-                         choices=['snn', 'snn-capsnet', 'snn-angularproto'],
+                         choices=['snn', 'snn-capsnet', 'snn-angularproto', 'snn-softmaxproto'],
                          help='Choose the model to train.')
 
     general.add_argument('--early_stop', action='store_true', default=False, help='Enable early stopping')

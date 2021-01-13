@@ -65,7 +65,7 @@ class BaseNet(pl.LightningModule):
 
         self._plot_roc: Final = plot_roc
 
-        if model == 'snn-angularproto':
+        if model == 'snn-angularproto' or model == 'snn-softmaxproto':
             self._example_input_array = torch.rand(batch_size, 1, n_mels, 201)
         else:
             self._example_input_array = [torch.rand(batch_size, 1, n_mels, 201), torch.rand(batch_size, 1, n_mels, 201)]
