@@ -1,11 +1,10 @@
-from typing import Tuple, List
+from typing import Tuple
 import torch
 import torch.nn.functional as F
 import pytorch_lightning as pl
 
 from .base import BaseNet
 from snn.librispeech.loss.angularproto import AngularPrototypicalLoss
-from resnet.utils import accuracy
 
 
 class SNNAngularProto(BaseNet):
@@ -22,7 +21,7 @@ class SNNAngularProto(BaseNet):
     def training_step(self,  # type: ignore[override]
                       batch: Tuple[torch.Tensor, torch.Tensor],
                       batch_idx: int) -> torch.Tensor:
-        support_sets, labels = batch
+        support_sets, _ = batch
         #print('support_sets', support_sets.shape)
         #print('labels', labels.shape)
 
@@ -49,17 +48,6 @@ class SNNAngularProto(BaseNet):
                                   self.num_shots,
                                   support.size(-1))
         assert support.size(1) == self.num_ways
-
-        # supports = []
-        # for shots in support_sets:
-        #     s = []
-        #     for waveform in shots:
-        #         x = self.spectogram_transform(waveform, augment=self.specaugment)
-        #         print('ResNet (spectro)', x.shape)
-        #         s.append(self.cnn(x))
-        #     supports.append(torch.cat(s, dim=0))
-
-        # support = torch.stack(supports, dim=0)
 
         loss, acc = self.training_loss_fn(support)
 

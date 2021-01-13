@@ -6,7 +6,7 @@ from resnet.utils import accuracy
 
 
 class AngularPrototypicalLoss(nn.Module):
-    def __init__(self, init_scale=10.0, init_bias=-5.0):
+    def __init__(self, init_scale=10.0, init_bias=-5.0, **kwargs):
         super().__init__()
         self.w = nn.Parameter(torch.as_tensor(init_scale))
         self.b = nn.Parameter(torch.as_tensor(init_bias))

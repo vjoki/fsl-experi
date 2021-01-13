@@ -109,7 +109,8 @@ class LibriSpeechDataModule(pl.LightningDataModule):
                                                      max_sample_length=self.max_sample_length)
 
             if self.num_train != 0:
-                self.training_sampler = torch.utils.data.RandomSampler(self.training_set, replacement=True,
+                self.training_sampler = torch.utils.data.RandomSampler(self.training_set,  # type: ignore
+                                                                       replacement=True,
                                                                        num_samples=self.num_train)
 
             self.validation_set = PairDataset(val_dataset, max_sample_length=self.max_sample_length)
