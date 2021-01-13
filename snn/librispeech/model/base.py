@@ -115,15 +115,18 @@ class BaseNet(pl.LightningModule):
         else:
             raise ValueError
 
+        cnn_out_dim: int
         if resnet_aggregation_type == 'SAP':
             cnn_out_dim = 512
         elif resnet_aggregation_type == 'ASP':
             cnn_out_dim = 512
         elif resnet_aggregation_type.endswith('VLAD'):
             cnn_out_dim = 512
+        self.cnn_out_dim = cnn_out_dim
 
-        # BxC -> Bx1
-        self.out: nn.Module = nn.Linear(cnn_out_dim, 1)
+        if model == 'snn' or model == 'snn-capsnet':
+            # BxC -> Bx1
+            self.out: nn.Module = nn.Linear(cnn_out_dim, 1)
 
         self.train_accuracy = pl.metrics.Accuracy()
         self.val_accuracy = pl.metrics.Accuracy(compute_on_step=False)
