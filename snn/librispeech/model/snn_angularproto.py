@@ -77,7 +77,7 @@ class SNNAngularProto(BaseNet):
         # out = -1 * torch.mean(out, dim=1)
         # out = out.unsqueeze(-1)
 
-        loss = F.binary_cross_entropy_with_logits(out, y)
+        loss = F.binary_cross_entropy_with_logits(out + 1e-6, y)
 
         self.val_accuracy(out, y)
         self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
@@ -105,7 +105,7 @@ class SNNAngularProto(BaseNet):
         # out = -1 * torch.mean(out, dim=1)
         # out = out.unsqueeze(-1)
 
-        loss = F.binary_cross_entropy_with_logits(out, y)
+        loss = F.binary_cross_entropy_with_logits(out + 1e-6, y)
 
         self.test_accuracy(out, y)
         self.log('test_loss', loss, on_step=False, on_epoch=True)

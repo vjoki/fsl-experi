@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 
 from snn.librispeech.dataset import PairDatasetFromList
 from snn.librispeech.datamodule import LibriSpeechDataModule
-from snn.librispeech.model import BaseNet, SNN, SNNCapsNet, SNNAngularProto
+from snn.librispeech.model import BaseNet, SNN, SNNCapsNet, SNNAngularProto, SNNSoftmaxProto
 
 
 def test():
@@ -14,7 +14,7 @@ def test():
     general = parser.add_argument_group('General')
     general.add_argument('--log_dir', type=str, default='./lightning_logs/', help='Tensorboard log directory')
     general.add_argument('--model', type=str.lower, default='SNN',
-                         choices=['snn', 'snn-capsnet', 'snn-angularproto'],
+                         choices=['snn', 'snn-capsnet', 'snn-angularproto', 'snn-softmaxproto'],
                          help='Type of the model to load.')
     general.add_argument('--model_path', type=str, required=True)
     general.add_argument('--test_list', type=str, default=None, help='File containing list of test pairs and labels')
@@ -39,6 +39,8 @@ def test():
         model = SNNCapsNet
     elif args.model == 'snn-angularproto':
         model = SNNAngularProto
+    elif args.model == 'snn-softmaxproto':
+        model = SNNSoftmaxProto
     model = model.load_from_checkpoint(args.model_path, strict=False,
                                        # Filter defaulted flags so that we don't needlessly override hparams.
                                        **{k: v for k, v in vars(args).items() if v != parser.get_default(k)})
