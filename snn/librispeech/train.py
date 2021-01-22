@@ -16,6 +16,7 @@ def train_and_test(args: argparse.Namespace):
     early_stop = args.early_stop
     early_stop_min_delta = args.early_stop_min_delta
     early_stop_patience = args.early_stop_patience
+    checkpoint_dir = args.checkpoint_dir
 
     pl.seed_everything(seed)
     callbacks: List[pl.callbacks.Callback] = [
@@ -32,7 +33,7 @@ def train_and_test(args: argparse.Namespace):
 
     checkpoint_callback = ModelCheckpoint(
         monitor='val_loss' if args.fast_dev_run else 'val_eer', mode='min',
-        filepath='./checkpoints/snn-librispeech-{epoch}-{val_loss:.2f}-{val_eer:.2f}',
+        filepath=checkpoint_dir + args.model + '-{epoch}-{val_loss:.2f}-{val_eer:.2f}',
         save_top_k=3
     )
 
@@ -65,6 +66,7 @@ def train_and_test(args: argparse.Namespace):
     # Train model.
     trainer.fit(model, datamodule=datamodule)
     print('Best model saved to: ', checkpoint_callback.best_model_path)
+    trainer.save_checkpoint(checkpoint_dir + args.model + '-last.ckpt')
 
     # Test using best checkpoint.
     trainer.test(datamodule=datamodule)
@@ -83,6 +85,7 @@ def train():
     general.add_argument('--early_stop_patience', type=int, default=15,
                          help='# of validation epochs with no improvement after which training will be stopped')
     general.add_argument('--log_dir', type=str, default='./lightning_logs/', help='Tensorboard log directory')
+    general.add_argument('--checkpoint_dir', type=str, default='./checkpoints/', help='Model checkpoint directory.')
 
     parser = BaseNet.add_model_specific_args(parser)
     parser = LibriSpeechDataModule.add_dataset_specific_args(parser)
