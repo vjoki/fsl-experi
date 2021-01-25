@@ -27,7 +27,7 @@ class BaseNet(pl.LightningModule):
     # NOTE: Defaults here shouldn't really matter much, they're just here to make initializing the model
     # for other purposes easier (such as log_graph)...
     def __init__(self, model: str,
-                 learning_rate: float = 1e-3, max_epochs: int = 100,
+                 max_epochs: int = 100,
                  augment: bool = False,
                  specaugment: bool = False,
                  signal_transform: str = 'melspectrogram',
@@ -55,7 +55,7 @@ class BaseNet(pl.LightningModule):
         self.num_ways: Final[int] = num_ways
         self.num_shots: Final[int] = num_shots
 
-        self.save_hyperparameters('model', 'learning_rate', 'max_epochs',
+        self.save_hyperparameters('model', 'max_epochs',
                                   'batch_size', 'train_batch_size', 'rng_seed',
                                   'max_sample_length',
                                   'num_ways', 'num_shots',
@@ -141,8 +141,6 @@ class BaseNet(pl.LightningModule):
                              help='Plot ROC curve after testing.')
 
         training = parser.add_argument_group('Training/testing')
-        training.add_argument('--learning_rate', type=float, default=1e-3,
-                              help='Initial learning rate used by auto_lr_find')
         training.add_argument('--specaugment', action='store_true', default=False,
                               help='Augment training data using SpecAugment without time warping.')
 
@@ -173,8 +171,8 @@ class BaseNet(pl.LightningModule):
         return x
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.learning_rate)
-        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=self.hparams.learning_rate,
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.get('learning_rate', 1e-3))
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=self.hparams.get('max_learning_rate', 0.1),
                                                         epochs=self.max_epochs,
                                                         steps_per_epoch=len(self.train_dataloader()))
         return [optimizer], [{'scheduler': scheduler, 'monitor': 'val_loss', 'interval': 'step'}]

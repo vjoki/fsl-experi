@@ -41,7 +41,8 @@ def train_and_test(args: argparse.Namespace):
     trainer = pl.Trainer.from_argparse_args(args, logger=logger, progress_bar_refresh_rate=20,
                                             # Gives rise to NaN with binary_cross_entropy_with_logits?
                                             #precision=16,
-                                            deterministic=True, auto_lr_find=True,
+                                            deterministic=True,
+                                            auto_lr_find=False,  # Do this manually.
                                             checkpoint_callback=checkpoint_callback,
                                             callbacks=callbacks)
 
@@ -59,8 +60,15 @@ def train_and_test(args: argparse.Namespace):
         model = SNNSoftmaxProto(**dict_args)
         datamodule = LibriSpeechDataModule(train_set_type='nshotkway', **dict_args)
 
-    # Tune learning rate.
+    # Tune.
     trainer.tune(model, datamodule=datamodule)
+
+    lr_finder = trainer.tuner.lr_find(model)
+    new_lr = lr_finder.suggestion()
+    max_lr = new_lr * 3  # max(lr_finder.results['lr'])
+    model.hparams.max_learning_rate = max_lr
+    model.hparams.learning_rate = new_lr
+    print('Learning rate set to {}.'.format(new_lr))
     logger.log_hyperparams(params=model.hparams)
 
     # Train model.
