@@ -77,8 +77,8 @@ class PairDatasetFromList(Dataset):
     def __getitem__(self, index):
         (label, a, b) = self.pairs[index]
 
-        waveform1, sample_rate = torchaudio.load_wav(os.path.join(self.data_path, a))
-        waveform2, _ = torchaudio.load_wav(os.path.join(self.data_path, b))
+        waveform1, sample_rate = torchaudio.load(os.path.join(self.data_path, a))
+        waveform2, _ = torchaudio.load(os.path.join(self.data_path, b))
         assert waveform1.device.type == waveform2.device.type == "cpu"
 
         max_frames = self._max_length * sample_rate if self._max_length else None
