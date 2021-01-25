@@ -114,7 +114,7 @@ def compose_augmentations(rir_path):
 
     return Compose([
         AddGaussianSNR(min_SNR=0.2, max_SNR=0.5, p=0.5),
-        AddImpulseResponse(rir_path, leave_length_unchanged=True, p=0.3),
+        AddImpulseResponse(impulse_path, leave_length_unchanged=True, p=0.3),
         AddBackgroundNoise(noise_path, p=0.3),
         AddShortNoises(noise_path, max_snr_in_db=80, p=0.3)
     ])
