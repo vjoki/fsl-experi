@@ -63,11 +63,18 @@ def train_and_test(args: argparse.Namespace):
     # Tune.
     trainer.tune(model, datamodule=datamodule)
 
-    lr_finder = trainer.tuner.lr_find(model)
-    new_lr = lr_finder.suggestion()
-    max_lr = new_lr * 3  # max(lr_finder.results['lr'])
-    model.hparams.max_learning_rate = max_lr
-    model.hparams.learning_rate = new_lr
+    # Prefer provided LR over lr_finder.
+    new_lr: float
+    if args.learning_rate:
+        new_lr = args.learning_rate
+    else:
+        lr_finder = trainer.tuner.lr_find(model)
+        new_lr = lr_finder.suggestion()
+
+    # Could also try max(lr_finder.results['lr'])
+    max_lr = new_lr * 3
+    model.hparams.max_learning_rate = max_lr  # type: ignore
+    model.hparams.learning_rate = new_lr  # type: ignore
     print('Learning rate set to {}.'.format(new_lr))
     logger.log_hyperparams(params=model.hparams)
 
@@ -87,8 +94,9 @@ def train():
                          choices=['snn', 'snn-capsnet', 'snn-angularproto', 'snn-softmaxproto'],
                          help='Choose the model to train.')
 
+    general.add_argument('--learning_rate', type=float, help='Override initial learning rate.')
     general.add_argument('--early_stop', action='store_true', default=False, help='Enable early stopping')
-    general.add_argument('--early_stop_min_delta', type=int, default=1e-8,
+    general.add_argument('--early_stop_min_delta', type=float, default=1e-8,
                          help='Minimum change in val_loss quantity to qualify as an improvement')
     general.add_argument('--early_stop_patience', type=int, default=15,
                          help='# of validation epochs with no improvement after which training will be stopped')

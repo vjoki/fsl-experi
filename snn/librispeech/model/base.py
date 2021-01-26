@@ -43,6 +43,7 @@ class BaseNet(pl.LightningModule):
                  num_ways: int = 1, num_shots: int = 1,
                  num_train: int = 0, num_speakers: int = 0,
                  num_workers: int = 1, data_path: str = './data/', rng_seed: int = 0,
+                 learning_rate: Optional[float] = None,
                  **kwargs):
         super().__init__()
         # Training/testing params
@@ -56,7 +57,7 @@ class BaseNet(pl.LightningModule):
         self.num_ways: Final[int] = num_ways
         self.num_shots: Final[int] = num_shots
 
-        self.save_hyperparameters('model', 'max_epochs',
+        self.save_hyperparameters('model', 'max_epochs', 'learning_rate',
                                   'batch_size', 'train_batch_size', 'rng_seed',
                                   'max_sample_length',
                                   'num_ways', 'num_shots',
