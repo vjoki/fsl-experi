@@ -4,7 +4,15 @@ import collections
 import torch.nn.functional as F
 from typing import Optional, List, Dict, Tuple
 from typing_extensions import Final
-from audiomentations import Compose, AddGaussianSNR, AddGaussianNoise, AddImpulseResponse, AddShortNoises, AddBackgroundNoise
+from audiomentations import Compose, Normalize, AddGaussianSNR, AddGaussianNoise, AddImpulseResponse, \
+    AddShortNoises, AddBackgroundNoise
+
+
+def get_fileid_speaker(fileid: str) -> str:
+    split = fileid.split("-")
+    if len(split) == 1:
+        split = fileid.split("_")
+    return split[0]
 
 
 def pair_speaker_samples(dataset: List[str], randomize: bool,
@@ -15,7 +23,8 @@ def pair_speaker_samples(dataset: List[str], randomize: bool,
     speakers_set: Final = set([])
     speaker_sample_indices: Final[Dict[str, List[int]]] = collections.defaultdict(list)
     for i, fileid in enumerate(dataset):
-        (speaker_id, _, _) = fileid.split("-")
+        speaker_id = get_fileid_speaker(fileid)
+
         speaker_sample_indices[speaker_id].append(i)
         speakers_set.add(speaker_id)
     speakers = list(speakers_set)

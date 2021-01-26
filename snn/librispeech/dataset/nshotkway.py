@@ -1,19 +1,19 @@
-import os
 import collections
 import random
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Union
 from typing_extensions import Final
 import torch
 import torchaudio.datasets as dset
 from torch.utils.data.dataset import Dataset
 
-from .util import process_waveform, compose_augmentations
+from .eduskunta import EDUSKUNTA
+from .util import process_waveform, compose_augmentations, get_fileid_speaker
 
 
 class NShotKWayDataset(Dataset):
     SAMPLE_RATE: Final[int] = 16000
 
-    def __init__(self, dataset: dset.LIBRISPEECH,
+    def __init__(self, dataset: Union[dset.LIBRISPEECH, EDUSKUNTA],
                  n_speakers: Optional[int] = None,
                  num_shots: int = 1,
                  num_ways: int = 5,
@@ -35,7 +35,7 @@ class NShotKWayDataset(Dataset):
         speaker_set = set([])
         samples: Dict[str, List[int]] = collections.defaultdict(list)
         for i, fileid in enumerate(self.dataset._walker):
-            (speaker_id, _, _) = fileid.split("-")
+            speaker_id = get_fileid_speaker(fileid)
             samples[speaker_id].append(i)
             speaker_set.add(speaker_id)
         speakers = list(speaker_set)

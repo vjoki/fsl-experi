@@ -1,11 +1,12 @@
 import os
-from typing import Optional
+from typing import Optional, Union
 from typing_extensions import Final
 import torch
 import torchaudio
 import torchaudio.datasets as dset
 from torch.utils.data.dataset import Dataset
 
+from .eduskunta import EDUSKUNTA
 from .util import pair_speaker_samples, process_waveform, compose_augmentations
 
 
@@ -13,7 +14,7 @@ from .util import pair_speaker_samples, process_waveform, compose_augmentations
 #        Randomization should happen in the DataLoader/Sampler.
 # 1-shot 1-way.
 class PairDataset(Dataset):
-    def __init__(self, dataset: dset.LIBRISPEECH,
+    def __init__(self, dataset: Union[dset.LIBRISPEECH, EDUSKUNTA],
                  n_speakers: Optional[int] = None,
                  max_sample_length: Optional[int] = None,
                  rir_path: str = './data/RIRS_NOISES/',
