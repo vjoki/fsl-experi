@@ -51,6 +51,7 @@ class BaseNet(pl.LightningModule):
         self.specaugment: Final = specaugment
         self.batch_size: Final[int] = batch_size
         self.train_batch_size: Final[int] = train_batch_size or batch_size
+        self.signal_transform: Final = signal_transform
 
         self.num_ways: Final[int] = num_ways
         self.num_shots: Final[int] = num_shots
@@ -164,7 +165,8 @@ class BaseNet(pl.LightningModule):
         with torch.no_grad():
             with torch.cuda.amp.autocast(enabled=False):
                 x = self.signal_transform_fn(x)+1e-6
-                x = x.log()
+                if self.signal_transform != 'mfcc':
+                    x = x.log()
                 if augment and self.augment_spectrogram:
                     x = self.augment_spectrogram(x)
                 x = self.instancenorm(x).unsqueeze(1)
