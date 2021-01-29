@@ -67,6 +67,8 @@ def train_and_test(args: argparse.Namespace):
     new_lr: float
     if args.learning_rate:
         new_lr = args.learning_rate
+    elif args.fast_dev_run:
+        new_lr = 1e-3
     else:
         lr_finder = trainer.tuner.lr_find(model)
         new_lr = lr_finder.suggestion()

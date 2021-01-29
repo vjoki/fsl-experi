@@ -5,7 +5,8 @@ from pytorch_lightning.metrics.functional import roc
 from pytorch_lightning.metrics.functional.classification import auroc
 
 
-def minDCF(fpr, fnr, thresholds, p_target: float = 0.05, c_miss: int = 1, c_fa: int = 1):
+def minDCF(fpr: torch.Tensor, fnr: torch.Tensor, thresholds: torch.Tensor,
+           p_target: float = 0.05, c_miss: int = 1, c_fa: int = 1):
     c_det = (c_miss * p_target * fnr) + (c_fa * (1 - p_target) * fpr)
     min_c_det_idx = torch.argmin(c_det)
     min_c_det = c_det[min_c_det_idx]

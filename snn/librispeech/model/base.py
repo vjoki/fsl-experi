@@ -66,7 +66,7 @@ class BaseNet(pl.LightningModule):
 
         self._plot_roc: Final = plot_roc
 
-        if model == 'snn-angularproto' or model == 'snn-softmaxproto':
+        if model in ('snn-angularproto', 'snn-softmaxproto'):
             self._example_input_array = torch.rand(batch_size, 1, n_mels, 201)
         else:
             self._example_input_array = [torch.rand(batch_size, 1, n_mels, 201), torch.rand(batch_size, 1, n_mels, 201)]
@@ -125,7 +125,7 @@ class BaseNet(pl.LightningModule):
             cnn_out_dim = 512
         self.cnn_out_dim = cnn_out_dim
 
-        if model == 'snn' or model == 'snn-capsnet':
+        if model in ('snn', 'snn-capsnet'):
             # BxC -> Bx1
             self.out: nn.Module = nn.Linear(cnn_out_dim, 1)
 
