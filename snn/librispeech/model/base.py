@@ -183,12 +183,8 @@ class BaseNet(pl.LightningModule):
         self.log('val_acc_epoch', self.val_accuracy.compute())
 
         try:
-            eer, eer_thresh, auc, mdcf, mdcf_thresh = compute_evaluation_metrics(val_step_outputs)
-            self.log('val_eer', eer)
-            self.log('val_eer_threshold', eer_thresh)
-            self.log('val_min_dcf', mdcf)
-            self.log('val_min_dcf_threshold', mdcf_thresh)
-            self.log('val_auc', auc)
+            metrics = compute_evaluation_metrics(val_step_outputs, prefix='val')
+            self.log_dict(metrics)
         except ValueError:
             # Will fail if labels are all the same value, which tends to happen with auto_lr_finder.
             # So we just ignore these.
@@ -201,9 +197,5 @@ class BaseNet(pl.LightningModule):
         if self.trainer.fast_dev_run:
             return
 
-        eer, eer_thresh, auc, mdcf, mdcf_thresh = compute_evaluation_metrics(test_step_outputs, plot=self._plot_roc)
-        self.log('test_eer', eer)
-        self.log('test_eer_threshold', eer_thresh)
-        self.log('test_min_dcf', mdcf)
-        self.log('test_min_dcf_threshold', mdcf_thresh)
-        self.log('test_auc', auc)
+        metrics = compute_evaluation_metrics(test_step_outputs, plot=self._plot_roc, prefix='test')
+        self.log_dict(metrics)
