@@ -1,6 +1,9 @@
+import os
 import argparse
+import csv
 import torch
 import pytorch_lightning as pl
+from datetime import datetime
 from pytorch_lightning.loggers import TensorBoardLogger
 from torch.utils.data import DataLoader
 
@@ -58,8 +61,31 @@ def test():
             num_workers=args.num_workers, pin_memory=torch.cuda.is_available()
         )
 
-    trainer.test(model=model, ckpt_path=args.model_path, test_dataloaders=test_dataloader)
+    results = trainer.test(model=model, ckpt_path=args.model_path, test_dataloaders=test_dataloader)
 
+    fields = ['date', 'test_loss', 'test_acc_epoch', 'test_eer',
+              'test_eer_threshold', 'test_min_dcf', 'test_min_dcf_threshold',
+              'test_auc', 'test_prec', 'test_recall',
+              'test_eer_acc', 'test_min_dcf_acc',
+              'test_list', 'model', 'model_path',
+              'max_sample_length', 'num_speakers', 'augment', 'max_epochs']
+    results_file_exists = os.path.isfile('results.csv')
+
+    with open('results.csv', 'a') as f:
+        writer = csv.DictWriter(f, fieldnames=fields)
+        if not results_file_exists:
+            writer.writeheader()
+
+        for r in results:
+            r['test_list'] = args.test_list
+            r['model'] = args.model
+            r['model_path'] = args.model_path
+            r['max_sample_length'] = model.hparams.max_sample_length
+            r['num_speakers'] = model.hparams.num_speakers
+            r['augment'] = model.hparams.augment
+            r['max_epochs'] = model.hparams.max_epochs
+            r['date'] = datetime.utcnow().strftime('%Y-%m-%d-%H:%M:%S')
+            writer.writerow(r)
 
 if __name__ == "__main__":
     test()
