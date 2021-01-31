@@ -1,4 +1,5 @@
-from typing import cast, Tuple, List
+from typing import cast, Tuple, List, Dict, Optional
+import warnings
 import torch
 import matplotlib.pyplot as plt
 from pytorch_lightning.metrics.functional import roc
@@ -19,7 +20,8 @@ def minDCF(fpr: torch.Tensor, fnr: torch.Tensor, thresholds: torch.Tensor,
 
 
 def equal_error_rate(fpr: torch.Tensor, fnr: torch.Tensor,
-                     thresholds: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+                     thresholds: torch.Tensor,
+                     warn_threshold: float = 0.1) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     # Index of the nearest intersection point.
     idx = torch.argmin(torch.abs(fnr - fpr))
 
@@ -30,6 +32,10 @@ def equal_error_rate(fpr: torch.Tensor, fnr: torch.Tensor,
     # but this on the other hand leads to frequent division by zero errors in some cases.
     eer = 0.5 * (fpr[idx] + fnr[idx])
     eer_threshold = thresholds[idx]
+
+    # Since we're averaging the EER, warn if the difference between FNR and FPR is too large.
+    if torch.abs(fpr[idx] - fnr[idx]) > warn_threshold:
+        warnings.warn('Inaccurate EER ({}), real EER is somewhere between or near [{}, {}].'.format(eer, fpr[idx], fnr[idx]))
 
     # https://yangcha.github.io/EER-ROC/
     # https://stackoverflow.com/questions/28339746/equal-error-rate-in-python
