@@ -1,24 +1,16 @@
-import platform
 from typing import Optional, List
 import argparse
 from typing_extensions import Final
 import torch
 import torch.nn as nn
-import torchaudio
 import pytorch_lightning as pl
 
 # from pytorch_metric_learning.losses import ContrastiveLoss
 # from pytorch_metric_learning.distances import LpDistance
 from resnet.ResNetSE34V2 import MainModel as ThinResNet
 from resnet.ResNetSE34L import MainModel as FastResNet
-from resnet.utils import PreEmphasis
 from snn.librispeech.utils import compute_evaluation_metrics
-
-if platform.system().lower().startswith('win'):
-    torchaudio.set_audio_backend("soundfile")
-    torchaudio.USE_SOUNDFILE_LEGACY_INTERFACE = False
-else:
-    torchaudio.set_audio_backend("sox_io")
+from .preprocessor import PreProcessor
 
 
 class BaseNet(pl.LightningModule):
@@ -28,6 +20,7 @@ class BaseNet(pl.LightningModule):
     # for other purposes easier (such as log_graph)...
     def __init__(self, model: str,
                  max_epochs: int = 100,
+                 torch_augment: bool = False,
                  augment: bool = False,
                  specaugment: bool = False,
                  signal_transform: str = 'melspectrogram',
@@ -47,7 +40,9 @@ class BaseNet(pl.LightningModule):
         super().__init__()
         # Training/testing params
         self.max_epochs: Final = max_epochs  # Needed for OneCycleLR
-        self.augment: Final = augment
+        if augment and torch_augment:
+            raise ValueError('Both augment and torch_augment provided, please choose one.')
+        self.augment: Final = augment or torch_augment
         self.specaugment: Final = specaugment
         self.batch_size: Final[int] = batch_size
         self.train_batch_size: Final[int] = train_batch_size or batch_size
@@ -60,7 +55,8 @@ class BaseNet(pl.LightningModule):
                                   'batch_size', 'train_batch_size', 'rng_seed',
                                   'max_sample_length',
                                   'num_ways', 'num_shots',
-                                  'num_speakers', 'num_train', 'augment',
+                                  'num_speakers', 'num_train',
+                                  'augment', 'torch_augment',
                                   'specaugment', 'signal_transform', 'n_fft', 'n_mels',
                                   'resnet_aggregation_type', 'resnet_type', 'resnet_n_out')
 
@@ -71,41 +67,11 @@ class BaseNet(pl.LightningModule):
         else:
             self._example_input_array = [torch.rand(batch_size, 1, n_mels, 201), torch.rand(batch_size, 1, n_mels, 201)]
 
-        self.instancenorm: Final[nn.Module] = nn.InstanceNorm1d(n_mels)
-        # 1xTIME*SAMPLERATE -> 1xN_MELSxTIME?
-
-        transform_fn: nn.Module
-        if signal_transform == 'melspectrogram':
-            transform_fn = torch.nn.Sequential(
-                PreEmphasis(),
-                torchaudio.transforms.MelSpectrogram(sample_rate=self.SAMPLE_RATE, n_fft=n_fft,
-                                                     win_length=400, hop_length=160,
-                                                     window_fn=torch.hamming_window, n_mels=n_mels)
-            )
-        elif signal_transform == 'spectrogram':
-            transform_fn = torch.nn.Sequential(
-                PreEmphasis(),
-                torchaudio.transforms.Spectrogram(n_fft=n_fft, win_length=400, hop_length=160,
-                                                  window_fn=torch.hamming_window)
-            )
-        elif signal_transform == 'mfcc':
-            transform_fn = torch.nn.Sequential(
-                PreEmphasis(),
-                torchaudio.transforms.MFCC(sample_rate=self.SAMPLE_RATE, n_mfcc=n_mels, log_mels=True)
-            )
-        self.signal_transform_fn: Final[nn.Module] = transform_fn
-
-        # Partial SpecAugment, if toggled.
-        self.augment_spectrogram: Optional[nn.Module] = None
-        if self.specaugment and signal_transform != 'mfcc':
-            F = 0.20
-            T = 0.10
-            self.augment_spectrogram = torch.nn.Sequential(
-                torchaudio.transforms.FrequencyMasking(freq_mask_param=int(F * n_mels)),
-                torchaudio.transforms.FrequencyMasking(freq_mask_param=int(F * n_mels)),
-                torchaudio.transforms.TimeMasking(time_mask_param=int(T * (n_fft // 2 + 1))),
-                torchaudio.transforms.TimeMasking(time_mask_param=int(T * (n_fft // 2 + 1)))
-            )
+        self.spectogram_transform: Final[nn.Module] = PreProcessor(signal_transform,
+                                                                   sample_rate=self.SAMPLE_RATE,
+                                                                   n_fft=n_fft, n_mels=n_mels,
+                                                                   specaugment=specaugment, torch_augment=torch_augment,
+                                                                   **kwargs)
 
         # Bx1xN_MELSxTIME -> BxC
         self.cnn: nn.Module
@@ -144,6 +110,8 @@ class BaseNet(pl.LightningModule):
         training = parser.add_argument_group('Training/testing')
         training.add_argument('--specaugment', action='store_true', default=False,
                               help='Augment training data using SpecAugment without time warping.')
+        training.add_argument('--torch_augment', action='store_true', default=False,
+                              help='Augment training data using GPU accelerated augmentations.')
 
         model = parser.add_argument_group('Model')
         model.add_argument('--signal_transform', type=str, default='melspectrogram',
@@ -160,17 +128,6 @@ class BaseNet(pl.LightningModule):
                            help='The aggregation method used in ResNet.')
 
         return parser
-
-    def spectogram_transform(self, x: torch.Tensor, augment: bool = False) -> torch.Tensor:
-        with torch.no_grad():
-            with torch.cuda.amp.autocast(enabled=False):
-                x = self.signal_transform_fn(x)+1e-6
-                if self.signal_transform != 'mfcc':
-                    x = x.log()
-                if augment and self.augment_spectrogram:
-                    x = self.augment_spectrogram(x)
-                x = self.instancenorm(x).unsqueeze(1)
-        return x
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.get('learning_rate', 1e-3),

@@ -1,11 +1,11 @@
 import os
 import random
 import collections
-import torch.nn.functional as F
 from typing import Optional, List, Dict, Tuple
+import torch.nn.functional as F
 from typing_extensions import Final
-from audiomentations import Compose, Normalize, AddGaussianSNR, AddGaussianNoise, AddImpulseResponse, \
-    AddShortNoises, AddBackgroundNoise
+from audiomentations import Compose, AddGaussianSNR, AddImpulseResponse, AddShortNoises, AddBackgroundNoise
+import torch_audiomentations as ta
 
 
 def get_fileid_speaker(fileid: str) -> str:
@@ -126,4 +126,17 @@ def compose_augmentations(rir_path):
         AddImpulseResponse(impulse_path, leave_length_unchanged=True, p=0.3),
         AddBackgroundNoise(noise_path, p=0.3),
         AddShortNoises(noise_path, max_snr_in_db=80, p=0.3)
+    ])
+
+
+def compose_torch_augmentations(rir_path):
+    impulse_path = os.path.join(rir_path, 'simulated_rirs')
+    noise_path = os.path.join(rir_path, 'pointsource_noises')
+    if not (os.path.exists(impulse_path) and os.path.exists(noise_path)):
+        raise ValueError('Unable to augment signal, rir_path "{}" does not exist.'.format(rir_path))
+
+    return ta.Compose(transforms=[
+        ta.ApplyImpulseResponse(impulse_path, convolve_mode='same', p=0.3),
+        ta.AddBackgroundNoise(noise_path, p=0.3),
+        ta.Gain(min_gain_in_db=-15.0, max_gain_in_db=10.0, p=0.3)
     ])

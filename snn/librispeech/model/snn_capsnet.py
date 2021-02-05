@@ -39,8 +39,8 @@ class SNNCapsNet(BaseNet):
                       batch_idx: int) -> torch.Tensor:
         x1, x2, y = batch
 
-        x1 = self.spectogram_transform(x1, augment=self.specaugment)
-        x2 = self.spectogram_transform(x2, augment=self.specaugment)
+        x1 = self.spectogram_transform(x1, augmentable=self.specaugment)
+        x2 = self.spectogram_transform(x2, augmentable=self.specaugment)
         out = self(x1, x2)
 
         loss = F.binary_cross_entropy_with_logits(out, y)

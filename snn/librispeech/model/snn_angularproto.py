@@ -35,7 +35,7 @@ class SNNAngularProto(BaseNet):
 
         #print('spectro in', support_sets.shape)
         # B*W*SxWAVE -> B*W*Sx1xNMELSxSPEC
-        x = self.spectogram_transform(support_sets, augment=self.specaugment)
+        x = self.spectogram_transform(support_sets, augmentable=self.specaugment)
         #print('ResNet (spectro)', x.shape)
         # B*W*Sx1xNMELSxSPEC -> B*W*SxN
         support = self.cnn(x)
