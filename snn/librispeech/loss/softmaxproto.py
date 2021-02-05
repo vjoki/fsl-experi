@@ -16,6 +16,4 @@ class SoftmaxPrototypicalLoss(nn.Module):
         if torch.isnan(nlossS) or torch.isinf(nlossS):
             print('Softmax loss is NaN or inf', x, label)
         nlossP, _ = self.angleproto(x, None)
-        if torch.isnan(nlossP) or torch.isinf(nlossP):
-            print('AngularProto loss is NaN or inf')
         return nlossS+nlossP, prec1

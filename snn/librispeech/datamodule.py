@@ -131,6 +131,7 @@ class LibriSpeechDataModule(pl.LightningDataModule):
             worker_init_fn=self.worker_init  # type: ignore
         )
         assert self.num_train == 0 or len(dataloader) == self.num_train
+        print('Created training DataLoader.')
         return dataloader
 
     def val_dataloader(self) -> DataLoader:  # type: ignore[override]

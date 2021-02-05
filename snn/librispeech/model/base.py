@@ -173,7 +173,8 @@ class BaseNet(pl.LightningModule):
         return x
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.get('learning_rate', 1e-3))
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.get('learning_rate', 1e-3),
+                                      weight_decay=1e-2)
         scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=self.hparams.get('max_learning_rate', 0.1),
                                                         epochs=self.max_epochs,
                                                         steps_per_epoch=len(self.train_dataloader()))
