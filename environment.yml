@@ -19,8 +19,8 @@ dependencies:
   - python=3.8
   - scipy=1.5.*
   - matplotlib=3.3
-  - pytorch::pytorch=1.7
-  - conda-forge::pytorch-lightning=1.1.*
+  - pytorch::pytorch=1.7.1
+  - conda-forge::pytorch-lightning=1.1
   - metric-learning::pytorch-metric-learning=0.9.*
   - tensorboard=2.3
   - pytorch::torchvision=0.8

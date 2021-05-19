@@ -39,8 +39,6 @@ def train_and_test(args: argparse.Namespace):
 
     logger = TensorBoardLogger(log_dir, name=args.model, log_graph=True, default_hp_metric=False)
     trainer = pl.Trainer.from_argparse_args(args, logger=logger, progress_bar_refresh_rate=20,
-                                            # Gives rise to NaN with binary_cross_entropy_with_logits?
-                                            #precision=16,
                                             deterministic=True,
                                             auto_lr_find=False,  # Do this manually.
                                             checkpoint_callback=checkpoint_callback,
@@ -74,7 +72,7 @@ def train_and_test(args: argparse.Namespace):
         new_lr = lr_finder.suggestion()
 
     # Could also try max(lr_finder.results['lr'])
-    max_lr = new_lr * 3
+    max_lr = new_lr * (args.max_lr_multiplier or 3)
     model.hparams.max_learning_rate = max_lr  # type: ignore
     model.hparams.learning_rate = new_lr  # type: ignore
     print('Learning rate set to {}.'.format(new_lr))
@@ -97,6 +95,9 @@ def train():
                          help='Choose the model to train.')
 
     general.add_argument('--learning_rate', type=float, help='Override initial learning rate.')
+    general.add_argument('--max_lr_multiplier', type=float,
+                         help='A multiplier that is applied on learning rate, the result of which is then provided to '
+                         'OneCycleLR scheduler as the maximum learning rate.')
     general.add_argument('--early_stop', action='store_true', default=False, help='Enable early stopping')
     general.add_argument('--early_stop_min_delta', type=float, default=1e-8,
                          help='Minimum change in val_loss quantity to qualify as an improvement')

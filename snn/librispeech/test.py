@@ -46,7 +46,8 @@ def test():
         model = SNNSoftmaxProto
     model = model.load_from_checkpoint(args.model_path, strict=False,
                                        # Filter defaulted flags so that we don't needlessly override hparams.
-                                       **{k: v for k, v in vars(args).items() if v != parser.get_default(k)})
+                                       # Exclude max_sample_length.
+                                       **{k: v for k, v in vars(args).items() if v != parser.get_default(k) or k == 'max_sample_length'})
     print(model.hparams)
 
     model.eval()
